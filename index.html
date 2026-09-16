@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+```
+<title>Raspberry Pi Surveillance & Audio</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #f4f4f9;
+        margin: 30px 0;
+    }
+
+    .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .video-container {
+        width: 640px;
+        max-width: 95vw;
+    }
+
+    video {
+        width: 100%;
+        background: black;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .status {
+        padding: 8px 15px;
+        border-radius: 5px;
+        background: #eee;
+        font-size: 14px;
+    }
+
+    .controls {
+        margin: 10px 0;
+    }
+
+    button {
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    #talkButton {
+        background-color: #d9534f;
+    }
+
+    #talkButton.active-talk {
+        background-color: #28a745;
+    }
+
+    #listenButton {
+        background-color: #337ab7;
+    }
+
+    #listenButton.active-listen {
+        background-color: #28a745;
+    }
+
+    button:disabled {
+        background-color: #777;
+        cursor: not-allowed;
+    }
+
+    .map-box {
+        margin-top: 20px;
+    }
+</style>
+```
+
+</head>
+
+<body>
+
+<div class="container">
+
+```
+<h2>Live Raspberry Pi Stream</h2>
+
+<!-- =====================================================
+     CAMERA + CAMERA AUDIO
+     ===================================================== -->
+
+<div class="video-container">
+
+    <video
+        id="cameraVideo"
+        autoplay
+        playsinline
+        controls>
+    </video>
+
+</div>
+
+<div id="cameraStatus" class="status">
+    Connecting to Raspberry Pi camera...
+</div>
+
+
+<!-- =====================================================
+     PI MICROPHONE -> WEBSITE
+     ===================================================== -->
+
+<div class="controls">
+
+    <button id="listenButton">
+        Enable Pi Microphone
+    </button>
+
+</div>
+
+<audio
+    id="piAudio"
+    autoplay
+    playsinline>
+</audio>
+
+
+<!-- =====================================================
+     WEBSITE MICROPHONE -> PI SPEAKER
+     ===================================================== -->
+
+<div class="controls">
+
+    <button id="talkButton">
+        Click to Talk to Pi
+    </button>
+
+</div>
+
+
+<!-- =====================================================
+     GOOGLE MAPS
+     DO NOT CHANGE
+     ===================================================== -->
+
+<div class="map-box">
+
+    <h3>Device Location</h3>
+
+    <iframe
+        src="https://www.google.com/maps?q=13.916045,121.141089&output=embed"
+        width="640"
+        height="250"
+        style="border:0;"
+        allowfullscreen=""
+        loading="lazy">
+    </iframe>
+
+</div>
+```
+
+</div>
+
+<script>
+
+    /*
+     * =========================================================
+     * CONFIGURATION
+     * =========================================================
+     */
+
+    const CLOUDFLARE_URL =
+        "https://diesel-humor-nascar-ict.trycloudflare.com";
+
+
+    /*
+     * =========================================================
+     * ELEMENTS
+     * =========================================================
+     */
+
+    const cameraVideo =
+        document.getElementById("cameraVideo");
+
+    const cameraStatus =
+        document.getElementById("cameraStatus");
+
+    const piAudio =
+        document.getElementById("piAudio");
+
+    const listenButton =
+        document.getElementById("listenButton");
+
+    const talkButton =
+        document.getElementById("talkButton");
+
+
+    /*
+     * =========================================================
+     * CONNECTION VARIABLES
+     * =========================================================
+     */
+
+    let cameraPC = null;
+    let piMicPC = null;
+    let talkPC = null;
+
+    let localMicStream = null;
+
+    let isTalking = false;
+    let isListening = false;
+
+
+    /*
+     * =========================================================
+     * GENERIC WHEP FUNCTION
+     *
+     * Used for:
+     *
+     *     /cam/whep
+     *     /mic/whep
+     *
+     * =========================================================
+     */
+
+    async function connectWHEP(path, mode, onTrack) {
+
+        const pc = new RTCPeerConnection();
+
+        pc.onconnectionstatechange = () => {
+
+            console.log(
+                path,
+                "connection state:",
+                pc.connectionState
+            );
+
+        };
+
+        pc.oniceconnectionstatechange = () => {
+
+            console.log(
+                path,
+                "ICE state:",
+                pc.iceConnectionState
+            );
+
+        };
+
+        pc.ontrack = onTrack;
+
+        pc.addTransceiver(
+            mode,
+            {
+                direction: "recvonly"
+            }
+        );
+
+        const offer =
+            await pc.createOffer();
+
+        await pc.setLocalDescription(offer);
+
+
+        /*
+         * Wait for ICE gathering.
+         */
+
+        await waitForICE(pc);
+
+
+        const response =
+            await fetch(
+                `${CLOUDFLARE_URL}${path}/whep`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/sdp"
+                    },
+
+                    body:
+                        pc.localDescription.sdp
+                }
+            );
+
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            throw new Error(
+                `${path}/whep returned ${response.status}: ${errorText}`
+            );
+
+        }
+
+
+        const answerSdp =
+            await response.text();
+
+
+        await pc.setRemoteDescription(
+            {
+                type: "answer",
+                sdp: answerSdp
+            }
+        );
+
+
+        return pc;
+    }
+
+
+    /*
+     * =========================================================
+     * ICE GATHERING
+     * =========================================================
+     */
+
+    function waitForICE(pc) {
+
+        return new Promise(resolve => {
+
+            if (pc.iceGatheringState === "complete") {
+
+                resolve();
+                return;
+
+            }
+
+            function checkState() {
+
+                if (
+                    pc.iceGatheringState === "complete"
+                ) {
+
+                    pc.removeEventListener(
+                        "icegatheringstatechange",
+                        checkState
+                    );
+
+                    resolve();
+
+                }
+
+            }
+
+            pc.addEventListener(
+                "icegatheringstatechange",
+                checkState
+            );
+
+        });
+
+    }
+
+
+    /*
+     * =========================================================
+     * CAMERA
+     *
+     * Pi camera -> MediaMTX -> WebRTC -> browser
+     *
+     * Path:
+     *
+     *     /cam/whep
+     *
+     * =========================================================
+     */
+
+    async function startCamera() {
+
+        try {
+
+            cameraStatus.textContent =
+                "Connecting to camera...";
+
+
+            cameraPC =
+                await connectWHEP(
+                    "/cam",
+                    "video",
+
+                    event => {
+
+                        console.log(
+                            "Camera track received"
+                        );
+
+                        cameraVideo.srcObject =
+                            event.streams[0];
+
+                        cameraVideo.play()
+                            .catch(err => {
+
+                                console.log(
+                                    "Camera autoplay:",
+                                    err
+                                );
+
+                            });
+
+                    }
+                );
+
+
+            cameraStatus.textContent =
+                "Camera connected";
+
+            console.log(
+                "Camera connected successfully"
+            );
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "Camera connection failed:",
+                error
+            );
+
+            cameraStatus.textContent =
+                "Camera connection failed";
+
+        }
+
+    }
+
+
+    /*
+     * =========================================================
+     * PI MICROPHONE -> WEBSITE
+     *
+     * Path:
+     *
+     *     /mic/whep
+     *
+     * =========================================================
+     */
+
+    listenButton.onclick =
+        async function() {
+
+            if (isListening) {
+
+                stopPiMicrophone();
+
+                return;
+
+            }
+
+
+            listenButton.disabled = true;
+
+            listenButton.textContent =
+                "Connecting...";
+
+
+            try {
+
+                piMicPC =
+                    await connectWHEP(
+                        "/mic",
+                        "audio",
+
+                        event => {
+
+                            console.log(
+                                "Pi microphone track received"
+                            );
+
+                            piAudio.srcObject =
+                                event.streams[0];
+
+                            piAudio.volume = 1.0;
+
+                            piAudio.play()
+                                .catch(err => {
+
+                                    console.log(
+                                        "Audio playback blocked:",
+                                        err
+                                    );
+
+                                });
+
+                        }
+                    );
+
+
+                isListening = true;
+
+                listenButton.disabled = false;
+
+                listenButton.textContent =
+                    "Stop Pi Microphone";
+
+                listenButton.classList.add(
+                    "active-listen"
+                );
+
+
+                console.log(
+                    "Pi microphone connected"
+                );
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Pi microphone connection failed:",
+                    error
+                );
+
+                listenButton.disabled = false;
+
+                listenButton.textContent =
+                    "Pi Microphone Failed";
+
+            }
+
+        };
+
+
+    /*
+     * =========================================================
+     * STOP PI MICROPHONE
+     * =========================================================
+     */
+
+    function stopPiMicrophone() {
+
+        if (piMicPC) {
+
+            piMicPC.close();
+            piMicPC = null;
+
+        }
+
+        piAudio.srcObject = null;
+
+        isListening = false;
+
+        listenButton.textContent =
+            "Enable Pi Microphone";
+
+        listenButton.classList.remove(
+            "active-listen"
+        );
+
+    }
+
+
+    /*
+     * =========================================================
+     * GET WEBSITE MICROPHONE
+     * =========================================================
+     */
+
+    async function initLocalMic() {
+
+        try {
+
+            localMicStream =
+                await navigator.mediaDevices.getUserMedia(
+                    {
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    }
+                );
+
+
+            console.log(
+                "Website microphone ready"
+            );
+
+        }
+
+        catch (error) {
+
+            console.error(
+                "Microphone permission failed:",
+                error
+            );
+
+            talkButton.disabled = true;
+
+            talkButton.textContent =
+                "Microphone Unavailable";
+
+        }
+
+    }
+
+
+    /*
+     * =========================================================
+     * WEBSITE MICROPHONE -> PI SPEAKER
+     *
+     * Path:
+     *
+     *     /from_pc/whip
+     *
+     * =========================================================
+     */
+
+    talkButton.onclick =
+        async function() {
+
+            if (isTalking) {
+
+                stopTalking();
+
+                return;
+
+            }
+
+
+            if (!localMicStream) {
+
+                await initLocalMic();
+
+            }
+
+
+            if (!localMicStream) {
+
+                alert(
+                    "Website microphone is unavailable."
+                );
+
+                return;
+
+            }
+
+
+            talkButton.disabled = true;
+
+            talkButton.textContent =
+                "Connecting...";
+
+
+            try {
+
+                talkPC =
+                    new RTCPeerConnection();
+
+
+                /*
+                 * Send browser microphone
+                 * to MediaMTX.
+                 */
+
+                localMicStream
+                    .getTracks()
+                    .forEach(track => {
+
+                        talkPC.addTrack(
+                            track,
+                            localMicStream
+                        );
+
+                    });
+
+
+                talkPC.onconnectionstatechange =
+                    () => {
+
+                        console.log(
+                            "Talk connection:",
+                            talkPC.connectionState
+                        );
+
+                    };
+
+
+                const offer =
+                    await talkPC.createOffer();
+
+
+                await talkPC.setLocalDescription(
+                    offer
+                );
+
+
+                await waitForICE(talkPC);
+
+
+                const response =
+                    await fetch(
+                        `${CLOUDFLARE_URL}/from_pc/whip`,
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/sdp"
+                            },
+
+                            body:
+                                talkPC.localDescription.sdp
+                        }
+                    );
+
+
+                if (!response.ok) {
+
+                    const errorText =
+                        await response.text();
+
+                    throw new Error(
+                        `WHIP returned ${response.status}: ${errorText}`
+                    );
+
+                }
+
+
+                const answerSdp =
+                    await response.text();
+
+
+                await talkPC.setRemoteDescription(
+                    {
+                        type: "answer",
+                        sdp: answerSdp
+                    }
+                );
+
+
+                isTalking = true;
+
+                talkButton.disabled = false;
+
+                talkButton.textContent =
+                    "Stop Talking";
+
+                talkButton.classList.add(
+                    "active-talk"
+                );
+
+
+                console.log(
+                    "Website -> Pi audio connected"
+                );
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Talk connection failed:",
+                    error
+                );
+
+
+                if (talkPC) {
+
+                    talkPC.close();
+                    talkPC = null;
+
+                }
+
+
+                isTalking = false;
+
+                talkButton.disabled = false;
+
+                talkButton.textContent =
+                    "Connection Failed";
+
+
+                setTimeout(() => {
+
+                    if (!isTalking) {
+
+                        talkButton.textContent =
+                            "Click to Talk to Pi";
+
+                    }
+
+                }, 3000);
+
+            }
+
+        };
+
+
+    /*
+     * =========================================================
+     * STOP TALKING
+     * =========================================================
+     */
+
+    function stopTalking() {
+
+        if (talkPC) {
+
+            talkPC.close();
+            talkPC = null;
+
+        }
+
+
+        isTalking = false;
+
+        talkButton.textContent =
+            "Click to Talk to Pi";
+
+        talkButton.classList.remove(
+            "active-talk"
+        );
+
+    }
+
+
+    /*
+     * =========================================================
+     * START EVERYTHING
+     * =========================================================
+     */
+
+    window.addEventListener(
+        "load",
+        async () => {
+
+            console.log(
+                "Starting Raspberry Pi surveillance system..."
+            );
+
+
+            /*
+             * Start camera first.
+             */
+
+            await startCamera();
+
+
+            /*
+             * Ask browser for microphone permission.
+             *
+             * This does NOT start sending audio to Pi.
+             */
+
+            await initLocalMic();
+
+        }
+    );
+
+
+    /*
+     * =========================================================
+     * CLEANUP
+     * =========================================================
+     */
+
+    window.addEventListener(
+        "beforeunload",
+        () => {
+
+            if (cameraPC)
+                cameraPC.close();
+
+            if (piMicPC)
+                piMicPC.close();
+
+            if (talkPC)
+                talkPC.close();
+
+            if (localMicStream) {
+
+                localMicStream
+                    .getTracks()
+                    .forEach(track =>
+                        track.stop()
+                    );
+
+            }
+
+        }
+    );
+
+</script>
+
+</body>
+</html>
