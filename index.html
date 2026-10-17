@@ -186,7 +186,7 @@ async function updateGPSMap() {
 
         // Support the API response format:
         // { success: true, location: { latitude, longitude } }
-        const location = data.location;
+        const location = data.location || data;
 
         if (
             !location ||
