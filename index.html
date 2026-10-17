@@ -151,20 +151,72 @@
      DO NOT CHANGE
      ===================================================== -->
 
-<div class="map-box">
 
+<div class="map-box">
     <h3>Device Location</h3>
 
     <iframe
+        id="gps-map"
         src="https://www.google.com/maps?q=13.916045,121.141089&output=embed"
         width="640"
         height="250"
-        style="border:0;"
-        allowfullscreen=""
+        style="border:0; max-width:100%;"
+        allowfullscreen
         loading="lazy">
     </iframe>
 
+    <p id="gps-status">Waiting for GPS location...</p>
 </div>
+
+<script>
+async function updateGPSMap() {
+    const status = document.getElementById("gps-status");
+    const map = document.getElementById("gps-map");
+
+    try {
+        const response = await fetch("/api/location", {
+            cache: "no-store"
+        });
+
+        if (!response.ok) {
+            throw new Error("API returned HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        // Support the API response format:
+        // { success: true, location: { latitude, longitude } }
+        const location = data.location;
+
+        if (
+            !location ||
+            !Number.isFinite(Number(location.latitude)) ||
+            !Number.isFinite(Number(location.longitude))
+        ) {
+            throw new Error("GPS coordinates are missing or invalid");
+        }
+
+        const latitude = Number(location.latitude);
+        const longitude = Number(location.longitude);
+
+        map.src =
+            "https://www.google.com/maps?q=" +
+            latitude + "," + longitude + "&output=embed";
+
+        status.textContent =
+            "GPS: " + latitude.toFixed(6) + ", " +
+            longitude.toFixed(6);
+
+    } catch (error) {
+        status.textContent = "Unable to retrieve GPS location: " + error.message;
+        console.error("GPS map update failed:", error);
+    }
+}
+
+updateGPSMap();
+setInterval(updateGPSMap, 5000);
+</script>
+
 ```
 
 </div>
