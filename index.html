@@ -5,7 +5,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-```
+    <script>
+    document.documentElement.style.visibility = "hidden";
+
+    fetch("/api/auth/me", {
+        cache: "no-store"
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            window.location.replace("/");
+            return;
+        }
+
+        return response.json();
+    })
+    .then(function(data) {
+        if (data && data.authenticated) {
+            document.documentElement.style.visibility = "visible";
+        }
+    })
+    .catch(function() {
+        window.location.replace("/");
+    });
+</script>
+
+```<button id="logoutButton" type="button">
+    Officer Logout
+</button>
+
+<script>
+    document.getElementById("logoutButton").addEventListener(
+        "click",
+        async function() {
+            await fetch("/api/auth/logout", {
+                method: "POST"
+            });
+
+            window.location.replace("/");
+        }
+    );
+</script>
 <title>Raspberry Pi Surveillance & Audio</title>
 
 <style>
