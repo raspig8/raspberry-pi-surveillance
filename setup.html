@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Authenticator Setup</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f4f7;
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+        }
+
+        .card {
+            background: white;
+            padding: 28px;
+            width: 340px;
+            max-width: calc(100% - 48px);
+            border-radius: 12px;
+            box-shadow: 0 5px 20px #0001;
+            text-align: center;
+        }
+
+        input, button {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 16px;
+        }
+
+        button {
+            background: #183b65;
+            color: white;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        img {
+            max-width: 240px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #message {
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="card">
+        <h2>Authenticator Setup</h2>
+
+        <p>
+            Enter the setup key configured in your Vercel
+            environment variables.
+        </p>
+
+        <form id="setupForm">
+            <input
+                id="setupKey"
+                type="password"
+                placeholder="Setup key"
+                autocomplete="off"
+                required
+            >
+
+            <button type="submit">Generate QR Code</button>
+        </form>
+
+        <p id="message" role="status"></p>
+        <img id="qrCode" alt="Authenticator enrollment QR code"
+             hidden>
+
+        <p>
+            Scan the QR code using Google Authenticator
+            or another compatible authenticator app.
+        </p>
+    </main>
+
+    <script>
+        const form = document.getElementById("setupForm");
+        const message = document.getElementById("message");
+        const qrImage = document.getElementById("qrCode");
+
+        form.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            message.textContent = "Generating QR code...";
+            qrImage.hidden = true;
+
+            try {
+                const response = await fetch("/api/auth/setup", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        setupKey: document.getElementById("setupKey").value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || "Setup failed.");
+                }
+
+                qrImage.src = data.qrCode;
+                qrImage.hidden = false;
+                message.textContent =
+                    "Scan this QR code with your authenticator app.";
+
+            } catch (error) {
+                message.textContent = error.message;
+            }
+        });
+    </script>
+</body>
+</html>
