@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Officer Authentication</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #edf1f5;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 8px 28px #172b4d18;
+        }
+
+        .brand {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .brand-icon {
+            margin: 0 auto 12px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #183b65;
+            color: white;
+            display: grid;
+            place-items: center;
+            font-size: 27px;
+            font-weight: bold;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #183b65;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #697586;
+            line-height: 1.5;
+        }
+
+        label {
+            display: block;
+            margin: 16px 0 7px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #cbd2da;
+            border-radius: 6px;
+        }
+
+        input:focus {
+            outline: 2px solid #7da7d9;
+            border-color: #183b65;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 22px;
+            border: 0;
+            border-radius: 6px;
+            background: #183b65;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        #message {
+            margin-top: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+
+        .notice {
+            background: #f3f6fa;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 12px;
+            color: #5b6573;
+            line-height: 1.5;
+            margin-top: 22px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="login-card">
+        <header class="brand">
+            <div class="brand-icon">L</div>
+
+            <h1>Officer Login</h1>
+
+            <div class="subtitle">
+                Lipa City Emergency-Ready Helmet
+                <br>
+                Secure Demonstration Portal
+            </div>
+        </header>
+
+        <form id="passwordForm">
+            <label for="officerId">Officer ID</label>
+
+            <input
+                id="officerId"
+                type="text"
+                autocomplete="username"
+                placeholder="Enter Officer ID"
+                required
+            >
+
+            <label for="password">Password</label>
+
+            <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Enter password"
+                required
+            >
+
+            <button id="passwordButton" type="submit">
+                Continue
+            </button>
+        </form>
+
+        <form id="otpForm" hidden>
+            <p>
+                <strong>Two-factor authentication</strong>
+            </p>
+
+            <p class="subtitle">
+                Open your authenticator app and enter
+                the current six-digit verification code.
+            </p>
+
+            <label for="otpCode">Authenticator Code</label>
+
+            <input
+                id="otpCode"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                placeholder="000000"
+                required
+            >
+
+            <button id="otpButton" type="submit">
+                Verify and Sign In
+            </button>
+        </form>
+
+        <p id="message" role="status" aria-live="polite"></p>
+
+        <div class="notice">
+            Demonstration authentication system.
+            This is not an official Philippine National Police
+            login service.
+        </div>
+    </main>
+
+    <script>
+        const passwordForm = document.getElementById("passwordForm");
+        const otpForm = document.getElementById("otpForm");
+        const message = document.getElementById("message");
+
+        async function checkExistingSession() {
+            try {
+                const response = await fetch("/api/auth/me", {
+                    cache: "no-store"
+                });
+
+                if (response.ok) {
+                    window.location.replace("/dashboard.html");
+                }
+            } catch (error) {
+                console.error("Session check failed:", error);
+            }
+        }
+
+        passwordForm.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const button = document.getElementById("passwordButton");
+            button.disabled = true;
+            message.textContent = "Verifying credentials...";
+
+            try {
+                const response = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        officerId:
+                            document.getElementById("officerId").value.trim(),
+                        password:
+                            document.getElementById("password").value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || "Login failed.");
+                }
+
+                passwordForm.hidden = true;
+                otpForm.hidden = false;
+                message.textContent = data.message;
+
+                document.getElementById("otpCode").focus();
+
+            } catch (error) {
+                message.textContent = error.message;
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        otpForm.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const button = document.getElementById("otpButton");
+            button.disabled = true;
+            message.textContent = "Verifying authenticator code...";
+
+            try {
+                const response = await fetch("/api/auth/verify", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        code: document.getElementById("otpCode").value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || "Verification failed.");
+                }
+
+                message.textContent = "Login successful. Opening dashboard...";
+
+                window.location.replace(data.redirect);
+
+            } catch (error) {
+                message.textContent = error.message;
+                document.getElementById("otpCode").value = "";
+                document.getElementById("otpCode").focus();
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        checkExistingSession();
+    </script>
+</body>
+</html>
