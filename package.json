@@ -1,0 +1,10 @@
+{
+  "name": "helmet-surveillance-login",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "jsonwebtoken": "9.0.2",
+    "qrcode": "1.5.4",
+    "speakeasy": "2.0.0"
+  }
+}
