@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-```
 <title>Raspberry Pi Surveillance & Audio</title>
 
 <style>
@@ -74,6 +73,14 @@
         background-color: #28a745;
     }
 
+    #notificationButton {
+        background-color: #5b6573;
+    }
+
+    #notificationButton.enabled {
+        background-color: #28a745;
+    }
+
     button:disabled {
         background-color: #777;
         cursor: not-allowed;
@@ -83,7 +90,6 @@
         margin-top: 20px;
     }
 </style>
-```
 
 </head>
 
@@ -91,8 +97,16 @@
 
 <div class="container">
 
-```
 <h2>Live Raspberry Pi Stream</h2>
+    <!-- Browser SOS notifications -->
+    <div class="controls">
+        <button id="notificationButton" type="button">
+            Enable SOS Browser Notifications
+        </button>
+        <p id="notificationStatus" class="status">
+            Allow browser notifications to receive SOS alerts.
+        </p>
+    </div>
 
 <!-- =====================================================
      CAMERA + CAMERA AUDIO
@@ -216,8 +230,128 @@ async function updateGPSMap() {
 updateGPSMap();
 setInterval(updateGPSMap, 5000);
 </script>
+<script>
+/*
+ * SOS BROWSER NOTIFICATIONS
+ * Polls /api/incident and notifies on a new inactive -> active transition.
+ */
+(() => {
+    const notificationButton = document.getElementById("notificationButton");
+    const notificationStatus = document.getElementById("notificationStatus");
 
-```
+    let lastIncidentActive = null;
+    let checkingIncident = false;
+
+    function updateNotificationButton() {
+        if (!("Notification" in window)) {
+            notificationButton.disabled = true;
+            notificationButton.textContent = "Browser Notifications Unsupported";
+            notificationStatus.textContent =
+                "This browser does not support desktop notifications.";
+            return;
+        }
+
+        if (Notification.permission === "granted") {
+            notificationButton.textContent = "SOS Notifications Enabled";
+            notificationButton.classList.add("enabled");
+            notificationStatus.textContent =
+                "Browser notifications are enabled. Keep this page open for SOS alerts.";
+        } else if (Notification.permission === "denied") {
+            notificationButton.textContent = "Notifications Blocked";
+            notificationButton.classList.remove("enabled");
+            notificationStatus.textContent =
+                "Notifications are blocked. Allow them in this site's browser settings.";
+        } else {
+            notificationButton.textContent = "Enable SOS Browser Notifications";
+            notificationButton.classList.remove("enabled");
+            notificationStatus.textContent =
+                "Click the button and allow notifications when your browser asks.";
+        }
+    }
+
+    notificationButton.addEventListener("click", async () => {
+        if (!("Notification" in window)) {
+            updateNotificationButton();
+            return;
+        }
+
+        try {
+            if (Notification.permission === "default") {
+                await Notification.requestPermission();
+            }
+            updateNotificationButton();
+
+            if (Notification.permission === "granted") {
+                new Notification("SOS Browser Notifications Enabled", {
+                    body: "This browser can now show new helmet SOS alerts.",
+                    tag: "sos-notification-ready"
+                });
+            }
+        } catch (error) {
+            console.error("Notification permission request failed:", error);
+            notificationStatus.textContent =
+                "Could not enable notifications. Check your browser's site settings.";
+        }
+    });
+
+    async function checkIncidentStatus() {
+        if (checkingIncident) return;
+        checkingIncident = true;
+
+        try {
+            const response = await fetch("/api/incident", {
+                method: "GET",
+                cache: "no-store"
+            });
+
+            if (!response.ok) {
+                throw new Error("Incident API returned HTTP " + response.status);
+            }
+
+            const incident = await response.json();
+            const isActive = incident.active === true;
+
+            // Establish a baseline on page load to avoid a duplicate alert
+            // just because the dashboard opened during an existing incident.
+            if (lastIncidentActive === null) {
+                lastIncidentActive = isActive;
+                return;
+            }
+
+            if (!lastIncidentActive && isActive) {
+                if ("Notification" in window &&
+                    Notification.permission === "granted") {
+                    const reason = typeof incident.reason === "string" &&
+                        incident.reason.trim()
+                        ? "Reason: " + incident.reason.trim()
+                        : "An incident has been detected.";
+
+                    new Notification("SOS — Helmet Emergency", {
+                        body: reason + " Open your dashboard to check the GPS location and live camera.",
+                        tag: "helmet-sos-incident",
+                        requireInteraction: true
+                    });
+                } else {
+                    console.warn(
+                        "SOS incident detected, but browser notifications are not enabled."
+                    );
+                }
+            }
+
+            lastIncidentActive = isActive;
+        } catch (error) {
+            console.error("SOS incident status check failed:", error);
+        } finally {
+            checkingIncident = false;
+        }
+    }
+
+    updateNotificationButton();
+    checkIncidentStatus();
+    setInterval(checkIncidentStatus, 2000);
+})();
+</script>
+
 
 </div>
 
