@@ -87,12 +87,128 @@
 
 </head>
 
+<script>
+let alertsEnabled = false;
+let audioCtx = null;
+let alarmTimer = null;
+let lastIncidentId = null;
+const originalTitle = document.title;
+let titleTimer = null;
+
+document.getElementById("alertButton").onclick = async function () {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    if ("Notification" in window && Notification.permission !== "granted") {
+        await Notification.requestPermission();
+    }
+
+    alertsEnabled = true;
+    this.textContent = "Emergency Alerts: ON";
+    this.style.background = "#28a745";
+};
+
+function beepOnce() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.2;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+}
+
+function startAlarm() {
+    stopAlarm();
+    beepOnce();
+    alarmTimer = setInterval(beepOnce, 1000);
+
+    let flash = false;
+    titleTimer = setInterval(() => {
+        flash = !flash;
+        document.title = flash ? "🚨 EMERGENCY 🚨" : originalTitle;
+    }, 800);
+}
+
+function stopAlarm() {
+    clearInterval(alarmTimer);
+    clearInterval(titleTimer);
+    alarmTimer = null;
+    titleTimer = null;
+    document.title = originalTitle;
+}
+
+function showBanner(text) {
+    let banner = document.getElementById("incident-banner");
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "incident-banner";
+        banner.style.cssText =
+            "background:#d9534f;color:white;padding:14px;font-weight:bold;";
+        document.body.prepend(banner);
+    }
+    banner.textContent = text;
+}
+
+function hideBanner() {
+    const banner = document.getElementById("incident-banner");
+    if (banner) banner.remove();
+}
+
+async function checkIncident() {
+    try {
+        const r = await fetch("/api/incident", { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+
+        if (d.active) {
+            const reason = d.reason || "Incident active";
+            showBanner("EMERGENCY: " + reason);
+
+            // Alert only once per incident
+            if (alertsEnabled && d.startedAt !== lastIncidentId) {
+                lastIncidentId = d.startedAt;
+                startAlarm();
+
+                if ("Notification" in window &&
+                    Notification.permission === "granted") {
+                    new Notification("EMERGENCY ALERT", {
+                        body: reason,
+                        requireInteraction: true
+                    });
+                }
+            }
+        } else {
+            lastIncidentId = null;
+            hideBanner();
+            stopAlarm();
+        }
+    } catch (e) {
+        console.error("Incident check failed:", e);
+    }
+}
+
+checkIncident();
+setInterval(checkIncident, 5000);
+
+// Clicking anywhere on the banner silences the alarm
+document.addEventListener("click", e => {
+    if (e.target.id === "incident-banner") stopAlarm();
+});
+</script>
+    
 <body>
 
 <div class="container">
 
 ```
 <h2>Live Raspberry Pi Stream</h2>
+
+<button id="alertButton" style="background:#f0ad4e;">
+    Enable Emergency Alerts
+</button>
 
 <!-- =====================================================
      CAMERA + CAMERA AUDIO
