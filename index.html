@@ -190,24 +190,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 });
 
-async function setupSOSNotifications() {
-    // Register the service worker and subscribe this browser
-    // to push notifications.
-    try {
-        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-            console.log("Push notifications are not supported.");
-            return;
-        }
 
-        const registration = await navigator.serviceWorker.register("/service-worker.js");
-
-        // Continue here with your existing VAPID key and push-subscription
-        // setup code for /api/push-key and /api/push-subscribe.
-        console.log("Service worker registered for SOS notifications.", registration);
-    } catch (error) {
-        console.error("SOS notification setup failed:", error);
-    }
-}
 </script>
 ```
 
