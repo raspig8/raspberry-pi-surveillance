@@ -164,26 +164,23 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
 
-    // If permission was already granted, set up SOS notifications.
     if (Notification.permission === "granted") {
-        await setupSOSNotifications();
+        console.log("SOS notifications are permitted.");
         return;
     }
 
-    // Do not repeatedly ask if the user denied permission.
     if (Notification.permission === "denied") {
-        console.log("Notification permission was denied in browser settings.");
+        console.log("Notifications are blocked in browser settings.");
         return;
     }
 
-    // Ask for permission automatically.
     try {
         const permission = await Notification.requestPermission();
 
         if (permission === "granted") {
-            await setupSOSNotifications();
+            console.log("SOS notifications are permitted.");
         } else {
-            console.log("SOS notifications were not enabled.");
+            console.log("SOS notification permission was not granted.");
         }
     } catch (error) {
         console.error("Notification permission error:", error);
@@ -1151,3 +1148,4 @@ async function updateNotificationButton() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
+
