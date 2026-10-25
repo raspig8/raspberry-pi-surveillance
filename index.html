@@ -374,30 +374,7 @@ async function updateNotificationButton() {
     }
 }
 
-    notificationButton.addEventListener("click", async () => {
-        if (!("Notification" in window)) {
-            updateNotificationButton();
-            return;
-        }
 
-        try {
-            if (Notification.permission === "default") {
-                await Notification.requestPermission();
-            }
-            updateNotificationButton();
-
-            if (Notification.permission === "granted") {
-                new Notification("SOS Browser Notifications Enabled", {
-                    body: "This browser can now show new helmet SOS alerts.",
-                    tag: "sos-notification-ready"
-                });
-            }
-        } catch (error) {
-            console.error("Notification permission request failed:", error);
-            notificationStatus.textContent =
-                "Could not enable notifications. Check your browser's site settings.";
-        }
-    });
 
     async function checkIncidentStatus() {
         if (checkingIncident) return;
