@@ -345,32 +345,34 @@ setInterval(updateGPSMap, 5000);
     let lastIncidentActive = null;
     let checkingIncident = false;
 
-    function updateNotificationButton() {
-        if (!("Notification" in window)) {
-            notificationButton.disabled = true;
-            notificationButton.textContent = "Browser Notifications Unsupported";
-            notificationStatus.textContent =
-                "This browser does not support desktop notifications.";
-            return;
-        }
-
-        if (Notification.permission === "granted") {
-            notificationButton.textContent = "SOS Notifications Enabled";
-            notificationButton.classList.add("enabled");
-            notificationStatus.textContent =
-                "Browser notifications are enabled. Keep this page open for SOS alerts.";
-        } else if (Notification.permission === "denied") {
-            notificationButton.textContent = "Notifications Blocked";
-            notificationButton.classList.remove("enabled");
-            notificationStatus.textContent =
-                "Notifications are blocked. Allow them in this site's browser settings.";
-        } else {
-            notificationButton.textContent = "Enable SOS Browser Notifications";
-            notificationButton.classList.remove("enabled");
-            notificationStatus.textContent =
-                "Click the button and allow notifications when your browser asks.";
-        }
+async function updateNotificationButton() {
+    if (!("Notification" in window)) {
+        console.log("This browser does not support notifications.");
+        return;
     }
+
+    if (Notification.permission === "granted") {
+        console.log("SOS browser notifications are enabled.");
+        return;
+    }
+
+    if (Notification.permission === "denied") {
+        console.log("Notifications are blocked in browser settings.");
+        return;
+    }
+
+    try {
+        const permission = await Notification.requestPermission();
+
+        if (permission === "granted") {
+            console.log("SOS browser notifications are enabled.");
+        } else {
+            console.log("SOS notification permission was not granted.");
+        }
+    } catch (error) {
+        console.error("Notification permission request failed:", error);
+    }
+}
 
     notificationButton.addEventListener("click", async () => {
         if (!("Notification" in window)) {
