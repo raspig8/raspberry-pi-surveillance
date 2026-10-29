@@ -196,6 +196,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 <div class="video-container">
 
+    
+    <div class="driver-selector">
+        <label for="driverSelect">SOS Emergency Driver:</label>
+
+        <select id="driverSelect">
+            <option value="">No active SOS</option>
+        </select>
+    </div>
+
+
     <video
         id="cameraVideo"
         autoplay
@@ -371,6 +381,14 @@ async function updateNotificationButton() {
 
             const incident = await response.json();
             const isActive = incident.active === true;
+
+            
+            updateDriverDropdown(isActive);
+
+            if (!isActive && (cameraPC || cameraStartInProgress)) {
+                stopCamera();
+            }
+
             
             if (isActive) {
                 if (!cameraPC && !cameraStartInProgress) {
@@ -436,7 +454,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://bull-pixel-char-organ.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
@@ -475,6 +493,50 @@ async function updateNotificationButton() {
 
     let isTalking = false;
     let isListening = false;
+
+    
+const driverSelect = document.getElementById("driverSelect");
+
+function updateDriverDropdown(isActive) {
+    const driverOption = driverSelect.querySelector(
+        'option[value="driver1"]'
+    );
+
+    if (isActive && !driverOption) {
+        const option = document.createElement("option");
+        option.value = "driver1";
+        option.textContent = "Driver 1";
+
+        driverSelect.appendChild(option);
+        driverSelect.options[0].textContent = "Select a driver";
+    }
+
+    if (!isActive && driverOption) {
+        // Reset selection before removing the driver.
+        driverSelect.value = "";
+        driverOption.remove();
+        driverSelect.options[0].textContent = "No active SOS";
+    }
+
+    if (!isActive) {
+        driverSelect.value = "";
+    }
+}
+
+driverSelect.addEventListener("change", () => {
+    if (driverSelect.value === "driver1") {
+        if (lastIncidentActive === true) {
+            startCamera();
+        } else {
+            driverSelect.value = "";
+            cameraStatus.textContent =
+                "Camera unavailable — no active SOS";
+        }
+    } else {
+        stopCamera();
+    }
+});
+
 
 
     /*
@@ -756,6 +818,8 @@ function stopCamera() {
         "Camera disconnected — no active SOS";
 
     console.log("Camera disconnected because SOS is inactive.");
+
+    
 }
 
 
