@@ -89,6 +89,149 @@
     .map-box {
         margin-top: 20px;
     }
+
+    
+/* =========================================
+   PROFESSIONAL POLICE DASHBOARD COMPONENTS
+   ========================================= */
+
+:root {
+    --police-navy: #172b45;
+    --police-blue: #245b91;
+    --police-blue-hover: #1b4977;
+    --panel-background: #ffffff;
+    --surface-background: #f3f6fa;
+    --border-color: #d6dee8;
+    --text-primary: #1d2939;
+    --text-secondary: #5d6b7d;
+    --status-background: #edf3f9;
+}
+
+/* Device Location and stream section headings */
+.section-heading {
+    color: var(--police-navy);
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.4;
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border-color);
+    letter-spacing: 0.01em;
+}
+
+/* Extra separation before the live camera section */
+.stream-heading {
+    margin-top: 28px;
+}
+
+
+
+/* SOS driver selection panel */
+.driver-selector {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    margin: 0 0 22px;
+
+    background: var(--panel-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(23, 43, 69, 0.05);
+}
+
+.driver-selector label {
+    color: var(--police-navy);
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.driver-selector select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 46px;
+    padding: 11px 38px 11px 12px;
+
+    background-color: #ffffff;
+    border: 1px solid #aebdce;
+    border-radius: 6px;
+
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.driver-selector select:hover {
+    border-color: var(--police-blue);
+}
+
+.driver-selector select:focus-visible {
+    outline: 3px solid rgba(36, 91, 145, 0.2);
+    border-color: var(--police-blue);
+}
+
+/* Camera connection status */
+#cameraStatus {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 11px 14px;
+    margin-top: 12px;
+
+    background: var(--surface-background);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Camera frame */
+.video-container {
+    overflow: hidden;
+    background: #101820;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+}
+
+#cameraVideo {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 220px;
+    max-height: 560px;
+    object-fit: contain;
+    background: #101820;
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+    .section-heading {
+        font-size: 1.08rem;
+        margin-bottom: 16px;
+    }
+
+    .stream-heading {
+        margin-top: 24px;
+    }
+
+    .driver-selector {
+        padding: 13px;
+    }
+
+    #cameraVideo {
+        min-height: 180px;
+    }
+}
+
 </style>
 
 </head>
@@ -151,7 +294,9 @@ document.getElementById("policeLoginForm").addEventListener("submit", function(e
 
 <div class="container">
 
-<h2>Live Raspberry Pi Stream</h2>
+<h2 class="section-heading stream-heading">
+    Live Raspberry Pi Stream
+</h2>
 
 <!-- =====================================================
      SOS Notification
@@ -259,7 +404,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 
 <div class="map-box">
-    <h3>Device Location</h3>
+    <h3 class="section-heading">Device Location</h3>
 
     <iframe
         id="gps-map"
@@ -310,7 +455,7 @@ async function updateGPSMap() {
             latitude + "," + longitude + "&output=embed";
 
         status.textContent =
-            "GPS: " + latitude.toFixed(6) + ", " +
+            "Location: " + latitude.toFixed(6) + ", " +
             longitude.toFixed(6);
 
     } catch (error) {
@@ -454,7 +599,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://kingston-routine-nathan-owner.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
