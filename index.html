@@ -129,43 +129,25 @@
 /* SOS driver selection panel */
 .driver-selector {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 9px;
-
-    box-sizing: border-box;
-    width: 100%;
-    padding: 16px;
-    margin: 0 0 22px;
-
-    background: var(--panel-background);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(23, 43, 69, 0.05);
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
 }
 
 .driver-selector label {
-    color: var(--police-navy);
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .driver-selector select {
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 46px;
-    padding: 11px 38px 11px 12px;
-
-    background-color: #ffffff;
-    border: 1px solid #aebdce;
-    border-radius: 6px;
-
-    color: var(--text-primary);
-    font: inherit;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    width: auto;
+    max-width: 180px;
+    padding: 6px 8px;
 }
 
 .driver-selector select:hover {
@@ -294,9 +276,9 @@ document.getElementById("policeLoginForm").addEventListener("submit", function(e
 
 <div class="container">
 
-<h2 class="section-heading stream-heading">
+<h3 class="section-heading stream-heading">
     Live Raspberry Pi Stream
-</h2>
+</h3>
 
 <!-- =====================================================
      SOS Notification
@@ -592,7 +574,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://untitled-director-luther-versions.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
