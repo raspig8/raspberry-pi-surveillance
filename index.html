@@ -371,6 +371,17 @@ async function updateNotificationButton() {
 
             const incident = await response.json();
             const isActive = incident.active === true;
+            
+            if (isActive) {
+                if (!cameraPC && !cameraStartInProgress) {
+                    startCamera();
+                }
+            } else {
+                if (cameraPC || cameraStartInProgress) {
+                    stopCamera();
+                }
+            }
+
 
             // Establish a baseline on page load to avoid a duplicate alert
             // just because the dashboard opened during an existing incident.
@@ -425,7 +436,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://grain-goat-fuzzy-bass.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
@@ -626,64 +637,111 @@ async function updateNotificationButton() {
      * =========================================================
      */
 
-    async function startCamera() {
 
-        try {
+let cameraStartInProgress = false;
+let cameraRequestId = 0;
 
-            cameraStatus.textContent =
-                "Connecting to camera...";
+async function startCamera() {
+    if (cameraStartInProgress) return;
 
-
-            cameraPC =
-                await connectWHEP(
-                    "/cam",
-                    "video",
-
-                    event => {
-
-                        console.log(
-                            "Camera track received"
-                        );
-
-                        cameraVideo.srcObject =
-                            event.streams[0];
-
-                        cameraVideo.play()
-                            .catch(err => {
-
-                                console.log(
-                                    "Camera autoplay:",
-                                    err
-                                );
-
-                            });
-
-                    }
-                );
-
-
-            cameraStatus.textContent =
-                "Camera connected";
-
-            console.log(
-                "Camera connected successfully"
-            );
-
-        }
-
-        catch (error) {
-
-            console.error(
-                "Camera connection failed:",
-                error
-            );
-
-            cameraStatus.textContent =
-                "Camera connection failed";
-
-        }
-
+    if (cameraPC &&
+        ["new", "connecting", "connected"].includes(
+            cameraPC.connectionState
+        )) {
+        return;
     }
+
+    cameraStartInProgress = true;
+    const requestId = ++cameraRequestId;
+
+    try {
+        cameraStatus.textContent = "Checking SOS status...";
+
+        const response = await fetch("/api/incident", {
+            method: "GET",
+            cache: "no-store"
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                "Incident API returned HTTP " + response.status
+            );
+        }
+
+        const incident = await response.json();
+
+        if (incident.active !== true) {
+            cameraStatus.textContent =
+                "Camera disconnected — no active SOS";
+            return;
+        }
+
+        // The SOS may have been cleared during an earlier await.
+        if (requestId !== cameraRequestId) return;
+
+        cameraStatus.textContent = "Connecting to camera...";
+
+        const pc = await connectWHEP(
+            "/cam",
+            "video",
+            event => {
+                if (requestId !== cameraRequestId ||
+                    pcIsObsolete(pc)) {
+                    return;
+                }
+
+                console.log("Camera track received");
+                cameraVideo.srcObject = event.streams[0];
+
+                cameraVideo.play().catch(err => {
+                    console.log("Camera autoplay:", err);
+                });
+            }
+        );
+
+        // The SOS may have been cleared while WHEP was connecting.
+        if (requestId !== cameraRequestId) {
+            pc.close();
+            return;
+        }
+
+        cameraPC = pc;
+        cameraStatus.textContent = "Camera connected";
+        console.log("Camera connected successfully");
+
+    } catch (error) {
+        if (requestId === cameraRequestId) {
+            console.error("Camera connection failed:", error);
+            cameraStatus.textContent = "Camera connection failed";
+        }
+    } finally {
+        cameraStartInProgress = false;
+    }
+}
+
+function pcIsObsolete(pc) {
+    return pc.connectionState === "closed";
+}
+
+
+function stopCamera() {
+    // Invalidate any camera connection attempt still in progress.
+    cameraRequestId++;
+
+    if (cameraPC) {
+        cameraPC.close();
+        cameraPC = null;
+    }
+
+    cameraVideo.pause();
+    cameraVideo.srcObject = null;
+
+    cameraStatus.textContent =
+        "Camera disconnected — no active SOS";
+
+    console.log("Camera disconnected because SOS is inactive.");
+}
+
 
 
     /*
@@ -1147,5 +1205,3 @@ async function updateNotificationButton() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
-
-
