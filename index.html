@@ -526,6 +526,7 @@ async function updateNotificationButton() {
 
             const incident = await response.json();
             const isActive = incident.active === true;
+            sosIncidentActive = isActive;
 
             
             updateDriverDropdown(isActive);
@@ -535,15 +536,7 @@ async function updateNotificationButton() {
             }
 
             
-            if (isActive) {
-                if (!cameraPC && !cameraStartInProgress) {
-                    startCamera();
-                }
-            } else {
-                if (cameraPC || cameraStartInProgress) {
-                    stopCamera();
-                }
-            }
+
 
 
             // Establish a baseline on page load to avoid a duplicate alert
@@ -599,7 +592,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://improve-outline-surge-cornell.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
@@ -638,6 +631,7 @@ async function updateNotificationButton() {
 
     let isTalking = false;
     let isListening = false;
+    let sosIncidentActive = false;
 
     
 const driverSelect = document.getElementById("driverSelect");
@@ -668,19 +662,16 @@ function updateDriverDropdown(isActive) {
     }
 }
 
+
 driverSelect.addEventListener("change", () => {
-    if (driverSelect.value === "driver1") {
-        if (lastIncidentActive === true) {
-            startCamera();
-        } else {
-            driverSelect.value = "";
-            cameraStatus.textContent =
-                "Camera unavailable — no active SOS";
-        }
+    if (driverSelect.value === "driver1" &&
+        sosIncidentActive === true) {
+        startCamera();
     } else {
         stopCamera();
     }
 });
+
 
 
 
@@ -856,6 +847,13 @@ async function startCamera() {
         ["new", "connecting", "connected"].includes(
             cameraPC.connectionState
         )) {
+        return;
+    }
+
+    if (sosIncidentActive !== true ||
+        driverSelect.value !== "driver1") {
+        cameraStatus.textContent =
+            "Select Driver 1 during an active SOS to connect";
         return;
     }
 
