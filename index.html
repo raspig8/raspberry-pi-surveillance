@@ -436,7 +436,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://desire-evident-perry-event.trycloudflare.com";
+        "https://api.trycloudflare.com";
 
 
     /*
@@ -641,6 +641,7 @@ async function updateNotificationButton() {
 let cameraStartInProgress = false;
 let cameraRequestId = 0;
 
+
 async function startCamera() {
     if (cameraStartInProgress) return;
 
@@ -672,11 +673,10 @@ async function startCamera() {
 
         if (incident.active !== true) {
             cameraStatus.textContent =
-                "Camera disconnected — no active SOS";
+                "Camera unavailable — no active SOS";
             return;
         }
 
-        // The SOS may have been cleared during an earlier await.
         if (requestId !== cameraRequestId) return;
 
         cameraStatus.textContent = "Connecting to camera...";
@@ -685,21 +685,35 @@ async function startCamera() {
             "/cam",
             "video",
             event => {
-                if (requestId !== cameraRequestId ||
-                    pcIsObsolete(pc)) {
+                // Do not reference pc here: this callback can run
+                // before connectWHEP() returns the peer connection.
+                if (requestId !== cameraRequestId) {
+                    console.log("Ignoring obsolete camera track.");
                     return;
                 }
 
-                console.log("Camera track received");
-                cameraVideo.srcObject = event.streams[0];
+                console.log("Camera track received:", event.track.kind);
 
-                cameraVideo.play().catch(err => {
-                    console.log("Camera autoplay:", err);
+                const stream = event.streams[0] ||
+                    new MediaStream([event.track]);
+
+                cameraVideo.srcObject = stream;
+
+                cameraVideo.play().then(() => {
+                    console.log(
+                        "Camera playback started. Video dimensions:",
+                        cameraVideo.videoWidth,
+                        "x",
+                        cameraVideo.videoHeight
+                    );
+                }).catch(err => {
+                    console.error("Camera playback failed:", err);
+                    cameraStatus.textContent =
+                        "Connected, but video playback failed";
                 });
             }
         );
 
-        // The SOS may have been cleared while WHEP was connecting.
         if (requestId !== cameraRequestId) {
             pc.close();
             return;
@@ -707,6 +721,7 @@ async function startCamera() {
 
         cameraPC = pc;
         cameraStatus.textContent = "Camera connected";
+
         console.log("Camera connected successfully");
 
     } catch (error) {
@@ -718,6 +733,7 @@ async function startCamera() {
         cameraStartInProgress = false;
     }
 }
+
 
 function pcIsObsolete(pc) {
     return pc.connectionState === "closed";
