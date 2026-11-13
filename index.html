@@ -670,9 +670,31 @@ driverSelect.addEventListener("change", () => {
      * =========================================================
      */
 
+
+async function createTurnPeerConnection() {
+
+    const response = await fetch("/api/ice");
+
+    if (!response.ok) {
+        throw new Error("Failed to obtain TURN credentials");
+    }
+
+    const data = await response.json();
+
+    if (!data.iceServers || !Array.isArray(data.iceServers)) {
+        throw new Error("Invalid TURN credentials response");
+    }
+
+    return new RTCPeerConnection({
+        iceServers: data.iceServers
+    });
+
+}
+
+
     async function connectWHEP(path, mode, onTrack) {
 
-        const pc = new RTCPeerConnection();
+        const pc = await createTurnPeerConnection();
 
         pc.onconnectionstatechange = () => {
 
@@ -1169,8 +1191,7 @@ function stopCamera() {
 
             try {
 
-                talkPC =
-                    new RTCPeerConnection();
+                talkPC = await createTurnPeerConnection();
 
 
                 /*
