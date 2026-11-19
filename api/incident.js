@@ -2,11 +2,10 @@
 export default async function handler(req, res) {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const incidentSecret = process.env.INCIDENT_CONTROL_SECRET;
 
-  if (!redisUrl || !redisToken || !incidentSecret) {
+  if (!redisUrl || !redisToken) {
     return res.status(500).json({
-      error: "Incident endpoint is not configured."
+      error: "Redis is not configured."
     });
   }
 
@@ -14,7 +13,7 @@ export default async function handler(req, res) {
     Authorization: `Bearer ${redisToken}`
   };
 
-  // Public read-only status for the website.
+  // Read current incident status.
   if (req.method === "GET") {
     try {
       const response = await fetch(
@@ -23,7 +22,7 @@ export default async function handler(req, res) {
       );
 
       if (!response.ok) {
-        throw new Error("Redis read failed");
+        throw new Error("Redis read failed.");
       }
 
       const result = await response.json();
@@ -39,6 +38,7 @@ export default async function handler(req, res) {
       return res.status(200).json(
         JSON.parse(result.result)
       );
+
     } catch (error) {
       return res.status(500).json({
         error: "Could not read incident status."
@@ -46,19 +46,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Only authorized clients can change incident status.
   if (req.method === "POST" || req.method === "DELETE") {
-    const suppliedSecret = req.headers["x-incident-secret"];
-
-    if (
-      typeof suppliedSecret !== "string" ||
-      suppliedSecret !== incidentSecret
-    ) {
-      return res.status(401).json({
-        error: "Unauthorized."
-      });
-    }
-
     try {
       const readResponse = await fetch(
         `${redisUrl}/get/incident_status`,
@@ -66,12 +54,12 @@ export default async function handler(req, res) {
       );
 
       if (!readResponse.ok) {
-        throw new Error("Redis read failed");
+        throw new Error("Redis read failed.");
       }
 
       const readResult = await readResponse.json();
 
-      let previous = readResult.result
+      const previous = readResult.result
         ? JSON.parse(readResult.result)
         : { active: false };
 
@@ -91,7 +79,6 @@ export default async function handler(req, res) {
         }
 
         if (req.body.active && previous.active) {
-          // Keep an existing incident active; log the additional trigger.
           status = {
             ...previous,
             lastTriggerReason:
@@ -104,9 +91,9 @@ export default async function handler(req, res) {
           status = {
             active: req.body.active,
             reason: req.body.active &&
-                    typeof req.body.reason === "string"
-              ? req.body.reason.slice(0, 200)
-              : null,
+              typeof req.body.reason === "string"
+                ? req.body.reason.slice(0, 200)
+                : null,
             lastTriggerReason: req.body.active
               ? (typeof req.body.reason === "string"
                   ? req.body.reason.slice(0, 200)
@@ -128,11 +115,61 @@ export default async function handler(req, res) {
       );
 
       if (!saveResponse.ok) {
-        throw new Error("Redis write failed");
+        throw new Error("Redis write failed.");
       }
 
-      return res.status(200).json(status);
+      let assignment = null;
+
+      // Automatically start assignment for a newly activated SOS.
+      const newIncident =
+        req.method === "POST" &&
+        status.active &&
+        !previous.active;
+
+      if (newIncident) {
+        const appUrl = process.env.APP_BASE_URL;
+
+        if (appUrl) {
+          try {
+            const assignmentResponse = await fetch(
+              `${appUrl.replace(/\/$/, "")}/api/police-assignment`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({}),
+                signal: AbortSignal.timeout(15000)
+              }
+            );
+
+            assignment = await assignmentResponse.json();
+
+            if (!assignmentResponse.ok) {
+              console.error(
+                "Assignment creation failed:",
+                assignment
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Could not start police assignment:",
+              error.message
+            );
+          }
+        } else {
+          console.error("APP_BASE_URL is not configured.");
+        }
+      }
+
+      return res.status(200).json({
+        ...status,
+        assignment
+      });
+
     } catch (error) {
+      console.error("Incident update failed:", error);
+
       return res.status(500).json({
         error: "Could not update incident status."
       });
@@ -140,6 +177,7 @@ export default async function handler(req, res) {
   }
 
   res.setHeader("Allow", "GET, POST, DELETE");
+
   return res.status(405).json({
     error: "Method not allowed."
   });
