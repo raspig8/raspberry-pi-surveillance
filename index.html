@@ -686,7 +686,8 @@ async function createTurnPeerConnection() {
     }
 
     return new RTCPeerConnection({
-        iceServers: data.iceServers
+        iceServers: data.iceServers,
+        iceTransportPolicy: "relay"
     });
 
 }
@@ -1432,4 +1433,5 @@ function stopCamera() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
+
 
