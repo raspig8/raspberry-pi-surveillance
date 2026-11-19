@@ -575,7 +575,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://digital-quoted-shepherd-poetry.trycloudflare.com";
+        "https://keyboard-apparel-hall-provincial.trycloudflare.com";
 
 
     /*
@@ -680,6 +680,12 @@ async function createTurnPeerConnection() {
     }
 
     const data = await response.json();
+    console.log(
+    "TURN username used by this peer:",
+    data.iceServers.find(s =>
+        String(s.urls).includes("turn:")
+    )?.username
+);
 
     if (!data.iceServers || !Array.isArray(data.iceServers)) {
         throw new Error("Invalid TURN credentials response");
@@ -1433,5 +1439,4 @@ function stopCamera() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
-
 
