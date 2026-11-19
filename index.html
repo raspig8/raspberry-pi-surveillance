@@ -221,7 +221,56 @@
 
 <body>
 
+<div id="policeLoginScreen" style="
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #101827;
+    color: white;
+    font-family: Arial, sans-serif;
+">
+    <div style="
+        width: 350px;
+        max-width: 90%;
+        padding: 30px;
+        border-radius: 12px;
+        background: #1e293b;
+        text-align: center;
+    ">
+        <h2>Police Officer Login</h2>
+        <p>Emergency Surveillance System</p>
 
+        <form id="policeLoginForm">
+            <input type="text" placeholder="Enter username" required
+                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;">
+
+            <input type="password" placeholder="Enter password" required
+                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;">
+
+            <button type="submit" style="
+                width:100%;
+                padding:12px;
+                margin-top:10px;
+                background:#2563eb;
+                color:white;
+                border:none;
+                border-radius:6px;
+                cursor:pointer;
+                font-size:16px;
+            ">Login</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.getElementById("policeLoginForm").addEventListener("submit", function(event) {
+    event.preventDefault();
+    document.getElementById("policeLoginScreen").style.display = "none";
+});
+</script>
 ```
 
 
@@ -275,17 +324,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 <div class="video-container">
 
+    
     <div class="driver-selector">
         <label for="driverSelect">SOS Emergency Driver:</label>
 
         <select id="driverSelect">
             <option value="">No active SOS</option>
         </select>
-
-        <button id="resolveIncidentButton" disabled>
-            Resolve Incident
-        </button>
     </div>
+
 
     <video
         id="cameraVideo"
@@ -447,74 +494,72 @@ async function updateNotificationButton() {
 
 
     async function checkIncidentStatus() {
-    if (checkingIncident) return;
+        if (checkingIncident) return;
+        checkingIncident = true;
 
-    checkingIncident = true;
+        try {
+            const response = await fetch("/api/incident", {
+                method: "GET",
+                cache: "no-store"
+            });
 
-    try {
-        const response = await fetch("/api/incident", {
-            method: "GET",
-            cache: "no-store"
-        });
+            if (!response.ok) {
+                throw new Error("Incident API returned HTTP " + response.status);
+            }
 
-        if (!response.ok) {
-            throw new Error(
-                "Incident API returned HTTP " + response.status
-            );
-        }
+            const incident = await response.json();
+            const isActive = incident.active === true;
+            sosIncidentActive = isActive;
 
-        const incident = await response.json();
-        const isActive = incident.active === true;
+            
+            updateDriverDropdown(isActive);
 
-        sosIncidentActive = isActive;
+            if (!isActive && (cameraPC || cameraStartInProgress)) {
+                stopCamera();
+            }
+
+            
 
 
-        // Stop camera when SOS becomes inactive.
-        // Do NOT release the Firebase assignment here.
-        if (!isActive && (cameraPC || cameraStartInProgress)) {
-            stopCamera();
-        }
 
-        // Restore Driver 1 selection if this PC still owns an assignment.
-        if (
-            isActive &&
-            window.policeIncidentClaimed === true &&
-            driverSelect.value !== "driver1"
-        ) {
-            driverSelect.value = "driver1";
-        }
+            // Establish a baseline on page load to avoid a duplicate alert
+            // just because the dashboard opened during an existing incident.
+            if (lastIncidentActive === null) {
+                lastIncidentActive = isActive;
+                return;
+            }
 
-        // Update Resolve Incident button.
-        if (resolveIncidentButton) {
-            resolveIncidentButton.disabled =
-                window.policeIncidentClaimed !== true;
-        }
+            if (!lastIncidentActive && isActive) {
+                if ("Notification" in window &&
+                    Notification.permission === "granted") {
+                    const reason = typeof incident.reason === "string" &&
+                        incident.reason.trim()
+                        ? "Reason: " + incident.reason.trim()
+                        : "An incident has been detected.";
 
-        // Establish baseline to avoid duplicate notifications.
-        if (lastIncidentActive === null) {
+                    new Notification("SOS — Helmet Emergency", {
+                        body: reason + " Open your dashboard to check the GPS location and live camera.",
+                        tag: "helmet-sos-incident",
+                        requireInteraction: true
+                    });
+                } else {
+                    console.warn(
+                        "SOS incident detected, but browser notifications are not enabled."
+                    );
+                }
+            }
+
             lastIncidentActive = isActive;
-            return;
+        } catch (error) {
+            console.error("SOS incident status check failed:", error);
+        } finally {
+            checkingIncident = false;
         }
-
-        // Notify officer when a new SOS arrives.
-        
-
-        lastIncidentActive = isActive;
-
-    } catch (error) {
-        console.error(
-            "SOS incident status check failed:",
-            error
-        );
-
-    } finally {
-        checkingIncident = false;
     }
-}
 
-updateNotificationButton();
-checkIncidentStatus();
-setInterval(checkIncidentStatus, 2000);
+    updateNotificationButton();
+    checkIncidentStatus();
+    setInterval(checkIncidentStatus, 2000);
 })();
 </script>
 
@@ -530,7 +575,7 @@ setInterval(checkIncidentStatus, 2000);
      */
 
     const CLOUDFLARE_URL =
-        "https://previously-kingdom-care-cruise.trycloudflare.com";
+        "https://scores-necessary-journalism-acceptable.trycloudflare.com";
 
 
     /*
@@ -572,319 +617,43 @@ setInterval(checkIncidentStatus, 2000);
     let sosIncidentActive = false;
 
     
-
 const driverSelect = document.getElementById("driverSelect");
 
-const resolveIncidentButton = document.getElementById(
-    "resolveIncidentButton"
-);
-
-// The assignment API, not SOS activation alone, controls
-// which police PC receives the Driver 1 offer.
 function updateDriverDropdown(isActive) {
     const driverOption = driverSelect.querySelector(
         'option[value="driver1"]'
     );
 
+    if (isActive && !driverOption) {
+        const option = document.createElement("option");
+        option.value = "driver1";
+        option.textContent = "Driver 1";
+
+        driverSelect.appendChild(option);
+        driverSelect.options[0].textContent = "Select a driver";
+    }
+
     if (!isActive && driverOption) {
+        // Reset selection before removing the driver.
         driverSelect.value = "";
         driverOption.remove();
+        driverSelect.options[0].textContent = "No active SOS";
     }
 
     if (!isActive) {
         driverSelect.value = "";
-        driverSelect.options[0].textContent = "No active SOS";
     }
 }
 
-// Send an authenticated request to the assignment API.
-async function policeAssignmentAction(action) {
-    if (typeof window.getPoliceIdToken !== "function") {
-        throw new Error("Police authentication is not ready.");
-    }
 
-    const idToken = await window.getPoliceIdToken();
-
-    const response = await fetch("/api/police-assignment", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ action })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            result.error || "Police assignment request failed."
-        );
-    }
-
-    return result;
-}
-
-// Accept the offer when Driver 1 is selected.
-driverSelect.addEventListener("change", async () => {
-    if (
-        driverSelect.value === "driver1" &&
-        sosIncidentActive === true
-    ) {
-        driverSelect.disabled = true;
-
-        try {
-            await policeAssignmentAction("accept");
-
-            window.policeIncidentClaimed = true;
-
-            if (resolveIncidentButton) {
-                resolveIncidentButton.disabled = false;
-            }
-
-            startCamera();
-
-        } catch (error) {
-            console.error("Could not accept assignment:", error);
-
-            alert(
-                error.message ||
-                "Unable to accept this incident."
-            );
-
-            driverSelect.value = "";
-            stopCamera();
-
-        } finally {
-            driverSelect.disabled = false;
-        }
-
+driverSelect.addEventListener("change", () => {
+    if (driverSelect.value === "driver1" &&
+        sosIncidentActive === true) {
+        startCamera();
     } else {
         stopCamera();
     }
 });
-
-// Resolve the police assignment without deactivating motorcycle SOS.
-if (resolveIncidentButton) {
-    resolveIncidentButton.addEventListener("click", async () => {
-        if (window.policeIncidentClaimed !== true) {
-            return;
-        }
-
-        resolveIncidentButton.disabled = true;
-        resolveIncidentButton.textContent = "Resolving...";
-
-        try {
-            await policeAssignmentAction("resolve");
-
-            window.policeIncidentClaimed = false;
-
-            driverSelect.value = "";
-            stopCamera();
-
-            alert("Police assignment resolved.");
-
-        } catch (error) {
-            console.error("Could not resolve assignment:", error);
-
-            alert(
-                error.message ||
-                "Unable to resolve the assignment."
-            );
-
-            resolveIncidentButton.disabled = false;
-
-        } finally {
-            resolveIncidentButton.textContent = "Resolve Incident";
-        }
-    });
-}
-
-
-// =========================================================
-// POLICE ASSIGNMENT POLLING
-// =========================================================
-
-let assignmentPollingStarted = false;
-let lastNotifiedOfferIncidentId = null;
-
-// Show or hide Driver 1 based on the assignment API response.
-function setDriverOfferVisible(visible, placeholderText) {
-    const existingOption = driverSelect.querySelector(
-        'option[value="driver1"]'
-    );
-
-    if (visible && !existingOption) {
-        const option = document.createElement("option");
-        option.value = "driver1";
-        option.textContent = "Driver 1 — SOS offer";
-
-        driverSelect.appendChild(option);
-    }
-
-    if (visible) {
-        driverSelect.options[0].textContent = "Select a driver";
-    } else {
-        driverSelect.value = "";
-
-        if (existingOption) {
-            existingOption.remove();
-        }
-
-        driverSelect.options[0].textContent =
-            placeholderText || "Waiting for assignment";
-    }
-}
-
-
-// Retrieve this PC's private assignment information.
-async function refreshPoliceAssignment() {
-    if (typeof window.getPoliceIdToken !== "function") {
-        return;
-    }
-
-    try {
-        const idToken = await window.getPoliceIdToken();
-
-        const response = await fetch("/api/police-assignment", {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${idToken}`
-            },
-            cache: "no-store"
-        });
-
-        if (!response.ok) {
-            throw new Error(
-                "Assignment API returned HTTP " + response.status
-            );
-        }
-
-        const result = await response.json();
-
-        // Motorcycle SOS is inactive.
-        if (result.active !== true) {
-            sosIncidentActive = false;
-
-            setDriverOfferVisible(false, "No active SOS");
-
-            window.policeIncidentClaimed = false;
-
-            if (resolveIncidentButton) {
-                resolveIncidentButton.disabled = true;
-            }
-
-            stopCamera();
-            return;
-        }
-
-        sosIncidentActive = true;
-
-        const assignment = result.assignment;
-
-        // No offer for this PC.
-        // No active offer or assignment belongs to this PC.
-        if (
-            !assignment ||
-            assignment.status === "waiting" ||
-            assignment.status === "unassigned" ||
-            assignment.status === "cancelled" ||
-            assignment.status === "resolved"
-        ) {
-            window.policeIncidentClaimed = false;
-
-            setDriverOfferVisible(
-                false,
-                assignment?.status === "unassigned"
-                    ? "No available police PC"
-                    : assignment?.status === "resolved"
-                        ? "Assignment resolved"
-                        : "Waiting for assignment"
-            );
-
-            if (resolveIncidentButton) {
-                resolveIncidentButton.disabled = true;
-            }
-
-            stopCamera();
-            return;
-        }
-
-        // This PC has received the offer.
-        if (assignment.status === "offered") {
-            setDriverOfferVisible(true);
-
-                window.policeIncidentClaimed = false;
-
-        if (resolveIncidentButton) {
-            resolveIncidentButton.disabled = true;
-        }
-
-            // Notify only once for this incident offer.
-            if (
-                lastNotifiedOfferIncidentId !== assignment.incidentId
-            ) {
-                lastNotifiedOfferIncidentId = assignment.incidentId;
-
-                if (
-                    "Notification" in window &&
-                    Notification.permission === "granted"
-                ) {
-                    new Notification("SOS — Police Assistance Offer", {
-                        body:
-                            "You have received an incident assignment offer. " +
-                            "Select Driver 1 to accept.",
-                        tag: "helmet-sos-offer-" + assignment.incidentId,
-                        requireInteraction: true
-                    });
-                }
-            }
-
-            return;
-        }
-
-        // This PC has already accepted the assignment.
-        if (assignment.status === "assigned") {
-            setDriverOfferVisible(true);
-
-            window.policeIncidentClaimed = true;
-
-            driverSelect.value = "driver1";
-
-            if (resolveIncidentButton) {
-                resolveIncidentButton.disabled = false;
-            }
-
-            if (!cameraPC && !cameraStartInProgress) {
-                startCamera();
-            }
-        }
-
-    } catch (error) {
-        console.error(
-            "Police assignment polling failed:",
-            error
-        );
-    }
-}
-
-
-// Start polling only after Firebase has registered this police PC.
-window.addEventListener("police-device-ready", () => {
-    if (assignmentPollingStarted) {
-        return;
-    }
-
-    assignmentPollingStarted = true;
-
-    console.log("Police assignment polling started.");
-
-    refreshPoliceAssignment();
-
-    setInterval(refreshPoliceAssignment, 2000);
-});
-
-
 
 
 
@@ -917,8 +686,7 @@ async function createTurnPeerConnection() {
     }
 
     return new RTCPeerConnection({
-        iceServers: data.iceServers,
-        
+        iceServers: data.iceServers
     });
 
 }
@@ -1186,23 +954,20 @@ function stopCamera() {
     // Invalidate any camera connection attempt still in progress.
     cameraRequestId++;
 
-    // Reset connection attempt state.
-    cameraStartInProgress = false;
-
-    // Close existing WebRTC connection.
     if (cameraPC) {
         cameraPC.close();
         cameraPC = null;
     }
 
-    // Stop video playback.
     cameraVideo.pause();
     cameraVideo.srcObject = null;
 
     cameraStatus.textContent =
-        "Camera disconnected";
+        "Camera disconnected — no active SOS";
 
-    console.log("Camera disconnected.");
+    console.log("Camera disconnected because SOS is inactive.");
+
+    
 }
 
 
@@ -1663,329 +1428,6 @@ function stopCamera() {
     );
 
 </script>
-
-<div id="policeLoginScreen" style="
-    position: fixed;
-    inset: 0;
-    z-index: 999999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #101827;
-    color: white;
-    font-family: Arial, sans-serif;
-">
-    <div style="
-        width: 350px;
-        max-width: 90%;
-        padding: 30px;
-        border-radius: 12px;
-        background: #1e293b;
-        text-align: center;
-    ">
-        <h2>Police Officer Login</h2>
-        <p>Emergency Surveillance System</p>
-
-        <form id="policeLoginForm">
-            <input
-                id="policeUsername"
-                type="text"
-                placeholder="Enter username"
-                autocomplete="username"
-                required
-                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;"
-            >
-
-            <input
-                id="policePassword"
-                type="password"
-                placeholder="Enter password"
-                autocomplete="current-password"
-                required
-                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;"
-            >
-
-            <p id="policeLoginError" style="
-                color:#f87171;
-                font-size:14px;
-                display:none;
-            "></p>
-
-            <button id="policeLoginButton" type="submit" style="
-                width:100%;
-                padding:12px;
-                margin-top:10px;
-                background:#2563eb;
-                color:white;
-                border:none;
-                border-radius:6px;
-                cursor:pointer;
-                font-size:16px;
-            ">Login</button>
-        </form>
-    </div>
-</div>
-
-
-
-<script type="module">
-import {
-    initializeApp
-} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
-
-import {
-    getAuth,
-    signInWithEmailAndPassword
-} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
-
-// Firebase Authentication configuration.
-// Realtime Database is no longer used.
-const firebaseConfig = {
-    apiKey: "AIzaSyCH3o9GMTLxtA_1PIKo_jbn1KOD1TrAZhY",
-    authDomain: "raspig8-9b067.firebaseapp.com",
-    projectId: "raspig8-9b067",
-    storageBucket: "raspig8-9b067.firebasestorage.app",
-    messagingSenderId: "519478378544",
-    appId: "1:519478378544:web:a676912d3e5eea38c3adf5",
-    measurementId: "G-YQTSLV7JDV"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-
-let policeLocationHeartbeat = null;
-
-const policeAccounts = {
-    "station1pc1": "station1pc1@policedemo.com",
-    "station1pc2": "station1pc2@policedemo.com",
-    "station2pc1": "station2pc1@policedemo.com",
-    "station3pc1": "station3pc1@policedemo.com"
-};
-
-// Allow other dashboard scripts to retrieve the Firebase ID token.
-window.getPoliceIdToken = async function() {
-    const user = auth.currentUser;
-
-    if (!user) {
-        throw new Error("Police user is not logged in.");
-    }
-
-    return await user.getIdToken();
-};
-
-// Register or update this police PC in Upstash Redis.
-async function updatePoliceDeviceLocation(username, position) {
-    const user = auth.currentUser;
-
-    if (!user) {
-        throw new Error("Police user is not logged in.");
-    }
-
-    const idToken = await user.getIdToken();
-
-    const response = await fetch("/api/police-device", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-            username: username,
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
-        }),
-        cache: "no-store"
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || result.success !== true) {
-        throw new Error(
-            result.error || `Police device API error: ${response.status}`
-        );
-    }
-
-    return result;
-}
-
-// Refresh the police PC's location every 60 seconds.
-function startPoliceLocationHeartbeat(username) {
-    if (policeLocationHeartbeat !== null) {
-        clearInterval(policeLocationHeartbeat);
-    }
-
-    policeLocationHeartbeat = setInterval(() => {
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                try {
-                    const result = await updatePoliceDeviceLocation(
-                        username,
-                        position
-                    );
-
-                    window.policeIncidentClaimed =
-                        result.claimedIncident === true;
-
-                    console.log("Police PC location refreshed.");
-                } catch (error) {
-                    console.error(
-                        "Could not refresh police PC location:",
-                        error
-                    );
-                }
-            },
-            (error) => {
-                console.warn(
-                    "Police PC location refresh failed:",
-                    error.message
-                );
-            },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 15000
-            }
-        );
-    }, 60000);
-}
-
-// Police login handler.
-document.getElementById("policeLoginForm").addEventListener(
-    "submit",
-    async function(event) {
-        event.preventDefault();
-
-        const username = document
-            .getElementById("policeUsername")
-            .value.trim().toLowerCase();
-
-        const password = document
-            .getElementById("policePassword")
-            .value;
-
-        const errorMessage = document.getElementById(
-            "policeLoginError"
-        );
-
-        const loginButton = document.getElementById(
-            "policeLoginButton"
-        );
-
-        errorMessage.style.display = "none";
-        errorMessage.textContent = "";
-
-        const email = policeAccounts[username];
-
-        if (!email) {
-            errorMessage.textContent =
-                "Invalid username or password.";
-
-            errorMessage.style.display = "block";
-            return;
-        }
-
-        loginButton.disabled = true;
-        loginButton.textContent = "Logging in...";
-
-        try {
-            // Authenticate using Firebase Authentication.
-            await signInWithEmailAndPassword(
-                auth,
-                email,
-                password
-            );
-
-            // Get the PC's current location.
-            navigator.geolocation.getCurrentPosition(
-                async function(position) {
-                    try {
-                        // Register this PC through the Redis API.
-                        const result = await updatePoliceDeviceLocation(
-                            username,
-                            position
-                        );
-
-                        const claimedIncident =
-                            result.claimedIncident === true;
-
-                        window.policeIncidentClaimed =
-                            claimedIncident;
-
-                        // Start the 60-second location heartbeat.
-                        startPoliceLocationHeartbeat(username);
-
-                        console.log("Police PC registered:", {
-                            username,
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude,
-                            claimedIncident,
-                            status: claimedIncident
-                                ? "busy"
-                                : "available"
-                        });
-
-                        // Notify the rest of the dashboard.
-                        window.dispatchEvent(
-                            new CustomEvent("police-device-ready", {
-                                detail: {
-                                    claimedIncident: claimedIncident
-                                }
-                            })
-                        );
-
-                        // Hide login screen after successful registration.
-                        document.getElementById(
-                            "policeLoginScreen"
-                        ).style.display = "none";
-
-                    } catch (error) {
-                        console.error(
-                            "Police device registration failed:",
-                            error
-                        );
-
-                        errorMessage.textContent =
-                            "Location obtained, but could not be saved. Please try again.";
-
-                        errorMessage.style.display = "block";
-                    }
-                },
-                function(locationError) {
-                    console.error(
-                        "Location error:",
-                        locationError
-                    );
-
-                    errorMessage.textContent =
-                        "Location permission is required. Please allow location access and try again.";
-
-                    errorMessage.style.display = "block";
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 0
-                }
-            );
-
-        } catch (error) {
-            console.error("Police login failed:", error);
-
-            errorMessage.textContent =
-                "Invalid username or password.";
-
-            errorMessage.style.display = "block";
-
-        } finally {
-            loginButton.disabled = false;
-            loginButton.textContent = "Login";
-        }
-    }
-);
-</script>
-
-
 
 </body>
 </html>
