@@ -62,7 +62,6 @@ export default async function handler(req, res) {
   try {
     const key = `police_device:${username}`;
 
-    // Store the PC record for 90 seconds.
     const saveResponse = await fetch(
       `${redisUrl}/set/${encodeURIComponent(key)}/${encodeURIComponent(
         JSON.stringify(device)
@@ -74,21 +73,15 @@ export default async function handler(req, res) {
       throw new Error("Could not save police device.");
     }
 
-    // Keep an index of registered police PCs.
     const indexResponse = await fetch(
-    `${redisUrl}/sadd/police_devices/${encodeURIComponent(username)}`,
-    { headers }
+      `${redisUrl}/sadd/police_devices:index/${encodeURIComponent(username)}`,
+      { headers }
     );
 
-    const indexBody = await indexResponse.text();
-
     if (!indexResponse.ok) {
-    console.error("Redis SADD failed:", {
-        status: indexResponse.status,
-        response: indexBody
-    });
-
-    throw new Error("Could not update police device index.");
+      const error = await indexResponse.text();
+      console.error("Redis SADD failed:", error);
+      throw new Error("Could not update police device index.");
     }
 
     return res.status(200).json({
