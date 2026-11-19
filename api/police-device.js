@@ -76,12 +76,19 @@ export default async function handler(req, res) {
 
     // Keep an index of registered police PCs.
     const indexResponse = await fetch(
-      `${redisUrl}/sadd/police_devices/${encodeURIComponent(username)}`,
-      { headers }
+    `${redisUrl}/sadd/police_devices/${encodeURIComponent(username)}`,
+    { headers }
     );
 
+    const indexBody = await indexResponse.text();
+
     if (!indexResponse.ok) {
-      throw new Error("Could not update police device index.");
+    console.error("Redis SADD failed:", {
+        status: indexResponse.status,
+        response: indexBody
+    });
+
+    throw new Error("Could not update police device index.");
     }
 
     return res.status(200).json({
