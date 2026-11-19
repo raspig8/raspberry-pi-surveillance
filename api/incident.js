@@ -1,4 +1,6 @@
 
+import { createPoliceAssignment } from "./lib/create-police-assignment.js";
+
 export default async function handler(req, res) {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -40,6 +42,8 @@ export default async function handler(req, res) {
       );
 
     } catch (error) {
+      console.error("Incident read failed:", error);
+
       return res.status(500).json({
         error: "Could not read incident status."
       });
@@ -120,45 +124,29 @@ export default async function handler(req, res) {
 
       let assignment = null;
 
-      // Automatically start assignment for a newly activated SOS.
+      // Automatically assign a newly activated SOS.
       const newIncident =
         req.method === "POST" &&
         status.active &&
         !previous.active;
 
       if (newIncident) {
-        const appUrl = process.env.APP_BASE_URL;
+        try {
+          assignment = await createPoliceAssignment({
+            redisUrl,
+            headers: redisHeaders
+          });
 
-        if (appUrl) {
-          try {
-            const assignmentResponse = await fetch(
-              `${appUrl.replace(/\/$/, "")}/api/police-assignment`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({}),
-                signal: AbortSignal.timeout(15000)
-              }
-            );
+        } catch (error) {
+          console.error(
+            "Automatic police assignment failed:",
+            error
+          );
 
-            assignment = await assignmentResponse.json();
-
-            if (!assignmentResponse.ok) {
-              console.error(
-                "Assignment creation failed:",
-                assignment
-              );
-            }
-          } catch (error) {
-            console.error(
-              "Could not start police assignment:",
-              error.message
-            );
-          }
-        } else {
-          console.error("APP_BASE_URL is not configured.");
+          assignment = {
+            success: false,
+            error: error.message
+          };
         }
       }
 
