@@ -16,6 +16,31 @@ function distanceKm(lat1, lon1, lat2, lon2) {
     Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Atomically create the assignment and index it.
+const CREATE_ASSIGNMENT_SCRIPT = `
+local result = redis.call(
+  "SET",
+  KEYS[1],
+  ARGV[1],
+  "NX",
+  "EX",
+  86400
+)
+
+if not result then
+  return cjson.encode({
+    created = false,
+    existing = redis.call("GET", KEYS[1])
+  })
+end
+
+redis.call("SADD", KEYS[2], ARGV[2])
+
+return cjson.encode({
+  created = true
+})
+`;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -51,42 +76,28 @@ export default async function handler(req, res) {
     return data.result;
   }
 
-  async function redisSet(key, value) {
-    const response = await fetch(
-      `${redisUrl}/set/${encodeURIComponent(key)}/${encodeURIComponent(
-        JSON.stringify(value)
-      )}`,
-      { headers }
-    );
-
-    if (!response.ok) {
-      throw new Error("Redis write failed.");
-    }
-
-    return response.json();
-  }
-
   try {
-    const incident = await redisGet("incident_status");
+    // Check the active rider incident.
+    const incidentRaw = await redisGet("incident_status");
 
-    if (!incident) {
+    if (!incidentRaw) {
       return res.status(404).json({
         error: "No incident found."
       });
     }
 
-    const incidentStatus = JSON.parse(incident);
+    const incident = JSON.parse(incidentRaw);
 
-    if (!incidentStatus.active || !incidentStatus.startedAt) {
+    if (!incident.active || !incident.startedAt) {
       return res.status(400).json({
         error: "There is no active incident."
       });
     }
 
-    const incidentId = incidentStatus.startedAt;
+    const incidentId = incident.startedAt;
     const assignmentKey = `assignment:${incidentId}`;
 
-    // Do not create a duplicate assignment.
+    // Return an existing assignment instead of duplicating it.
     const existing = await redisGet(assignmentKey);
 
     if (existing) {
@@ -97,26 +108,28 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get rider location.
-    const riderData = await redisGet("latest_location");
+    // Retrieve rider location.
+    const riderRaw = await redisGet("latest_location");
 
-    if (!riderData) {
+    if (!riderRaw) {
       return res.status(400).json({
         error: "Rider GPS location is unavailable."
       });
     }
 
-    const rider = JSON.parse(riderData);
-
+    const rider = JSON.parse(riderRaw);
     const riderLat = Number(rider.latitude);
     const riderLon = Number(rider.longitude);
+    const riderTime = Date.parse(rider.updatedAt);
 
     if (
       !Number.isFinite(riderLat) ||
-      !Number.isFinite(riderLon)
+      !Number.isFinite(riderLon) ||
+      !Number.isFinite(riderTime) ||
+      Date.now() - riderTime > 5 * 60 * 1000
     ) {
       return res.status(400).json({
-        error: "Invalid rider GPS coordinates."
+        error: "Rider GPS location is invalid or outdated."
       });
     }
 
@@ -136,40 +149,38 @@ export default async function handler(req, res) {
     const candidates = [];
 
     for (const username of usernames) {
-      const deviceData = await redisGet(
+      const deviceRaw = await redisGet(
         `police_device:${username}`
       );
 
-      if (!deviceData) continue;
+      if (!deviceRaw) continue;
 
-      const device = JSON.parse(deviceData);
+      const device = JSON.parse(deviceRaw);
 
       if (device.status !== "available") continue;
 
-      const lat = Number(device.latitude);
-      const lon = Number(device.longitude);
-
-      if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lon)
-      ) continue;
-
+      const latitude = Number(device.latitude);
+      const longitude = Number(device.longitude);
       const lastSeen = Date.parse(device.lastSeen);
 
       if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
         !Number.isFinite(lastSeen) ||
         Date.now() - lastSeen > 90000
-      ) continue;
+      ) {
+        continue;
+      }
 
       candidates.push({
         username,
-        latitude: lat,
-        longitude: lon,
+        latitude,
+        longitude,
         distanceKm: distanceKm(
           riderLat,
           riderLon,
-          lat,
-          lon
+          latitude,
+          longitude
         )
       });
     }
@@ -180,7 +191,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Nearest PC first.
+    // Sort nearest PC first.
     candidates.sort(
       (a, b) => a.distanceKm - b.distanceKm
     );
@@ -198,30 +209,43 @@ export default async function handler(req, res) {
       assignedAt: new Date(now).toISOString(),
       deadline: now + 15000,
       acceptedBy: null,
+      acceptedAt: null,
       resolvedAt: null
     };
 
-    // Create the assignment only if it does not already exist.
-    const saveResponse = await fetch(
-      `${redisUrl}/set/${encodeURIComponent(assignmentKey)}/${encodeURIComponent(
+    // Atomically save assignment and add its ID to the index.
+    const response = await fetch(
+      `${redisUrl}/eval/${encodeURIComponent(
+        CREATE_ASSIGNMENT_SCRIPT
+      )}/2/${encodeURIComponent(
+        assignmentKey
+      )}/${encodeURIComponent(
+        "active_assignments"
+      )}/${encodeURIComponent(
         JSON.stringify(assignment)
-      )}/NX/EX/86400`,
-      { headers }
+      )}/${encodeURIComponent(
+        incidentId
+      )}`,
+      {
+        headers,
+        signal: AbortSignal.timeout(10000)
+      }
     );
 
-    if (!saveResponse.ok) {
+    if (!response.ok) {
       throw new Error("Could not create assignment.");
     }
 
-    const saveResult = await saveResponse.json();
+    const data = await response.json();
+    const result = JSON.parse(data.result);
 
-    if (saveResult.result !== "OK") {
-      const latest = await redisGet(assignmentKey);
-
+    if (!result.created) {
       return res.status(200).json({
         success: true,
         message: "Assignment already exists.",
-        assignment: latest ? JSON.parse(latest) : null
+        assignment: result.existing
+          ? JSON.parse(result.existing)
+          : null
       });
     }
 
@@ -239,3 +263,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
