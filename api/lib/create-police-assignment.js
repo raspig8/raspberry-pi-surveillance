@@ -136,9 +136,24 @@ export async function createPoliceAssignment({
   }
 
   const indexData = await indexResponse.json();
-  const usernames = indexData.result || [];
 
-  const candidates = [];
+console.log("POLICE INDEX DIAGNOSTIC:", {
+  redisError: indexData.error || null,
+  usernames: indexData.result || [],
+  usernameCount: Array.isArray(indexData.result)
+    ? indexData.result.length
+    : 0
+});
+
+if (indexData.error) {
+  throw new Error(
+    `Redis police index error: ${indexData.error}`
+  );
+}
+
+const usernames = indexData.result || [];
+
+const candidates = [];
 
   // 5. Retrieve and validate police PCs.
   for (const username of usernames) {
@@ -179,9 +194,15 @@ export async function createPoliceAssignment({
     });
   }
 
-  if (candidates.length === 0) {
+  console.log("POLICE CANDIDATE DIAGNOSTIC:", {
+  indexedUsernames: usernames,
+  candidateCount: candidates.length,
+  candidates
+});
+
+if (candidates.length === 0) {
     throw new Error("No available police PCs found.");
-  }
+}
 
   // 6. Select the nearest police PC.
   candidates.sort(
