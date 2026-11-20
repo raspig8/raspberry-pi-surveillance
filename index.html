@@ -614,7 +614,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://investigator-ultram-steel-motel.trycloudflare.com";
+        "https://funny-unwrap-hanging-tired.trycloudflare.com";
         // Identify this police PC using its dashboard URL.
         const params = new URLSearchParams(window.location.search);
         const POLICE_USERNAME = params.get("pc");
@@ -648,9 +648,7 @@ async function checkPoliceAssignments() {
         const assignments = data.assignments || [];
 
         const pendingAssignment = assignments.find(
-            item =>
-                item.status === "pending" &&
-                item.assignedTo === POLICE_USERNAME
+        item => item.status === "pending"
         );
 
         const panel = document.getElementById("assignmentPanel");
@@ -1795,4 +1793,6 @@ function stopCamera() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
+
+
 
