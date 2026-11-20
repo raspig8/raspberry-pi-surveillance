@@ -577,6 +577,13 @@ async function updateNotificationButton() {
 
     const CLOUDFLARE_URL =
         "https://funny-unwrap-hanging-tired.trycloudflare.com";
+        // Identify this police PC using its dashboard URL.
+        const params = new URLSearchParams(window.location.search);
+        const POLICE_USERNAME = params.get("pc");
+
+        if (!POLICE_USERNAME) {
+            alert("Missing police PC identifier in the dashboard URL.");
+        }
 
 
     /*
