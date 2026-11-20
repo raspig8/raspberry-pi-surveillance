@@ -581,6 +581,75 @@ async function updateNotificationButton() {
         const params = new URLSearchParams(window.location.search);
         const POLICE_USERNAME = params.get("pc");
 
+    
+// =========================================
+// POLICE PC REGISTRATION + HEARTBEAT
+// =========================================
+
+const POLICE_HEARTBEAT_INTERVAL = 30000;
+
+async function registerPoliceDevice() {
+    if (!POLICE_USERNAME) return;
+
+    if (!navigator.geolocation) {
+        console.error("Geolocation is not supported.");
+        return;
+    }
+
+    try {
+        // Get this PC's current location.
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 10000
+                }
+            );
+        });
+
+        const response = await fetch("/api/police-device", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: POLICE_USERNAME,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                available: true
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Registration failed.");
+        }
+
+        console.log(
+            "Police PC registered:",
+            POLICE_USERNAME,
+            result.device
+        );
+
+    } catch (error) {
+        console.error("Police PC registration failed:", error);
+    }
+}
+
+// Register immediately.
+registerPoliceDevice();
+
+// Renew registration every 30 seconds.
+setInterval(
+    registerPoliceDevice,
+    POLICE_HEARTBEAT_INTERVAL
+);
+
+
         if (!POLICE_USERNAME) {
             alert("Missing police PC identifier in the dashboard URL.");
         }
