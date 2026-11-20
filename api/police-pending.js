@@ -1,5 +1,4 @@
 
-
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -32,14 +31,14 @@ export default async function handler(req, res) {
     Authorization: `Bearer ${redisToken}`
   };
 
-  async function redisGet(key) {
+  async function redisCommand(command, ...args) {
     const response = await fetch(
-      `${redisUrl}/get/${encodeURIComponent(key)}`,
+      `${redisUrl}/${command}/${args.map(encodeURIComponent).join("/")}`,
       { headers }
     );
 
     if (!response.ok) {
-      throw new Error("Redis read failed.");
+      throw new Error(`Redis ${command} failed.`);
     }
 
     const data = await response.json();
@@ -47,33 +46,57 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Retrieve all active assignment IDs.
-    const indexResponse = await fetch(
-      `${redisUrl}/smembers/active_assignments`,
-      { headers }
-    );
-
-    if (!indexResponse.ok) {
-      throw new Error("Could not retrieve assignment index.");
-    }
-
-    const indexData = await indexResponse.json();
-    const incidentIds = indexData.result || [];
+    const incidentIds = await redisCommand(
+      "smembers",
+      "active_assignments"
+    ) || [];
 
     const assignments = [];
+    const now = Date.now();
 
     for (const incidentId of incidentIds) {
-      const raw = await redisGet(
+      const raw = await redisCommand(
+        "get",
         `assignment:${incidentId}`
       );
 
       if (!raw) {
+        await redisCommand(
+          "srem",
+          "active_assignments",
+          incidentId
+        );
         continue;
       }
 
       const assignment = JSON.parse(raw);
 
-      // Return only assignments currently offered to this PC.
+      // Automatically expire assignments that were never accepted.
+      if (
+        assignment.status === "pending" &&
+        Number(assignment.deadline) <= now
+      ) {
+        assignment.status = "expired";
+
+        await redisCommand(
+          "set",
+          `assignment:${incidentId}`,
+          JSON.stringify(assignment),
+          "EX",
+          86400
+        );
+
+        // Remove this incident from the active assignment index.
+        await redisCommand(
+          "srem",
+          "active_assignments",
+          incidentId
+        );
+
+        continue;
+      }
+
+      // Return only active assignments offered to this PC.
       if (
         assignment.assignedTo === username &&
         ["pending", "accepted"].includes(assignment.status)
@@ -104,3 +127,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
