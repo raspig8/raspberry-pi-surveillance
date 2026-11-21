@@ -1,15 +1,15 @@
-
 export default async function handler(req, res) {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const gpsApiKey = process.env.GPS_API_KEY;
 
-  if (!redisUrl || !redisToken) {
+  if (!redisUrl || !redisToken || !gpsApiKey) {
     return res.status(500).json({
-      error: "Redis is not configured."
+      error: "Server environment variables are not configured."
     });
   }
 
-  // Retrieve the latest rider GPS location.
+  // Allow the website to retrieve the latest GPS location.
   if (req.method === "GET") {
     try {
       const response = await fetch(
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       );
 
       if (!response.ok) {
-        throw new Error("Redis request failed.");
+        throw new Error("Redis request failed");
       }
 
       const result = await response.json();
@@ -35,21 +35,22 @@ export default async function handler(req, res) {
         });
       }
 
-      return res.status(200).json(
-        JSON.parse(result.result)
-      );
-
+      return res.status(200).json(JSON.parse(result.result));
     } catch (error) {
-      console.error("GPS retrieval failed:", error);
-
       return res.status(500).json({
         error: "Could not retrieve the latest GPS location."
       });
     }
   }
 
-  // Receive GPS coordinates from the Raspberry Pi.
+  // Only the Raspberry Pi with the correct API key can update the location.
   if (req.method === "POST") {
+    if (req.headers["x-api-key"] !== gpsApiKey) {
+      return res.status(401).json({
+        error: "Unauthorized."
+      });
+    }
+
     const latitude = Number(req.body?.latitude);
     const longitude = Number(req.body?.longitude);
 
@@ -85,17 +86,14 @@ export default async function handler(req, res) {
       );
 
       if (!response.ok) {
-        throw new Error("Redis request failed.");
+        throw new Error("Redis request failed");
       }
 
       return res.status(200).json({
         success: true,
         location
       });
-
     } catch (error) {
-      console.error("GPS save failed:", error);
-
       return res.status(500).json({
         error: "Could not save the GPS location."
       });
@@ -103,7 +101,6 @@ export default async function handler(req, res) {
   }
 
   res.setHeader("Allow", "GET, POST");
-
   return res.status(405).json({
     error: "Method not allowed."
   });
