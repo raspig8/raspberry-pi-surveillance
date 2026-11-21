@@ -553,9 +553,11 @@ async function updateNotificationButton() {
             
             updateDriverDropdown(isActive);
 
-            if (!isActive && (cameraPC || cameraStartInProgress)) {
-                stopCamera();
-            }
+// Stop ALL live connections when the rider cancels SOS.
+if (!isActive) {
+    stopCamera();
+    stopAudioConnections();
+}
 
             
 
@@ -614,7 +616,7 @@ async function updateNotificationButton() {
      */
 
     const CLOUDFLARE_URL =
-        "https://took-vegas-modern-glasses.trycloudflare.com";
+        "https://you-once-mathematical-incident.trycloudflare.com";
         // Identify this police PC using its dashboard URL.
         const params = new URLSearchParams(window.location.search);
         const POLICE_USERNAME = params.get("pc");
@@ -801,27 +803,9 @@ document.getElementById("resolveAssignmentButton").addEventListener(
                 "none";
 
             // Stop the live camera and audio connections.
-if (cameraPC) {
-    cameraPC.close();
-    cameraPC = null;
-}
-
-if (piMicPC) {
-    piMicPC.close();
-    piMicPC = null;
-}
-
-if (talkPC) {
-    talkPC.close();
-    talkPC = null;
-}
-
-if (localMicStream) {
-    localMicStream.getTracks().forEach(track => track.stop());
-    localMicStream = null;
-}
-
-cameraVideo.srcObject = null;
+// Stop all live connections.
+stopCamera();
+stopAudioConnections();
 
             document.getElementById("resolveAssignmentButton").style.display =
                 "none";
@@ -969,6 +953,8 @@ setInterval(
     let isTalking = false;
     let isListening = false;
     let sosIncidentActive = false;
+    let piMicRequestId = 0;
+    let talkRequestId = 0;
 
     
 const driverSelect = document.getElementById("driverSelect");
@@ -1344,89 +1330,86 @@ function stopCamera() {
      * =========================================================
      */
 
-    listenButton.onclick =
-        async function() {
+    listenButton.onclick = async function() {
 
-            if (isListening) {
+    if (isListening) {
+        stopPiMicrophone();
+        return;
+    }
 
-                stopPiMicrophone();
+    if (!sosIncidentActive) {
+        listenButton.textContent = "No Active SOS";
+        return;
+    }
 
-                return;
+    const requestId = ++piMicRequestId;
 
-            }
+    listenButton.disabled = true;
+    listenButton.textContent = "Connecting...";
 
+    try {
 
-            listenButton.disabled = true;
+        const pc = await connectWHEP(
+            "/mic",
+            "audio",
 
-            listenButton.textContent =
-                "Connecting...";
+            event => {
 
+                // Ignore audio tracks from cancelled connections.
+                if (
+                    requestId !== piMicRequestId ||
+                    !sosIncidentActive
+                ) {
+                    return;
+                }
 
-            try {
+                console.log("Pi microphone track received");
 
-                piMicPC =
-                    await connectWHEP(
-                        "/mic",
-                        "audio",
+                piAudio.srcObject =
+                    event.streams[0] ||
+                    new MediaStream([event.track]);
 
-                        event => {
+                piAudio.volume = 1.0;
 
-                            console.log(
-                                "Pi microphone track received"
-                            );
-
-                            piAudio.srcObject =
-                                event.streams[0];
-
-                            piAudio.volume = 1.0;
-
-                            piAudio.play()
-                                .catch(err => {
-
-                                    console.log(
-                                        "Audio playback blocked:",
-                                        err
-                                    );
-
-                                });
-
-                        }
-                    );
-
-
-                isListening = true;
-
-                listenButton.disabled = false;
-
-                listenButton.textContent =
-                    "Stop Pi Microphone";
-
-                listenButton.classList.add(
-                    "active-listen"
-                );
-
-
-                console.log(
-                    "Pi microphone connected"
-                );
+                piAudio.play().catch(err => {
+                    console.log("Audio playback blocked:", err);
+                });
 
             }
+        );
 
-            catch (error) {
+        // Cancellation may have happened while connecting.
+        if (
+            requestId !== piMicRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
 
-                console.error(
-                    "Pi microphone connection failed:",
-                    error
-                );
+        piMicPC = pc;
 
-                listenButton.disabled = false;
+        isListening = true;
 
-                listenButton.textContent =
-                    "Pi Microphone Failed";
+        listenButton.disabled = false;
+        listenButton.textContent = "Stop Pi Microphone";
 
-            }
+        listenButton.classList.add("active-listen");
 
-        };
+        console.log("Pi microphone connected");
+
+    } catch (error) {
+
+        if (requestId !== piMicRequestId) return;
+
+        console.error("Pi microphone connection failed:", error);
+
+        listenButton.disabled = false;
+        listenButton.textContent = "Pi Microphone Failed";
+
+    }
+
+};
 
 
     /*
@@ -1437,25 +1420,27 @@ function stopCamera() {
 
     function stopPiMicrophone() {
 
-        if (piMicPC) {
+    // Invalidate any connection attempt still in progress.
+    piMicRequestId++;
 
-            piMicPC.close();
-            piMicPC = null;
-
-        }
-
-        piAudio.srcObject = null;
-
-        isListening = false;
-
-        listenButton.textContent =
-            "Enable Pi Microphone";
-
-        listenButton.classList.remove(
-            "active-listen"
-        );
-
+    if (piMicPC) {
+        piMicPC.close();
+        piMicPC = null;
     }
+
+    piAudio.pause();
+    piAudio.srcObject = null;
+
+    isListening = false;
+
+    listenButton.disabled = false;
+    listenButton.textContent = "Enable Pi Microphone";
+
+    listenButton.classList.remove("active-listen");
+
+    console.log("Pi microphone disconnected.");
+
+}
 
 
     /*
@@ -1514,184 +1499,170 @@ function stopCamera() {
      * =========================================================
      */
 
-    talkButton.onclick =
-        async function() {
-
-            if (isTalking) {
-
-                stopTalking();
-
-                return;
-
-            }
-
-
-            if (!localMicStream) {
-
-                await initLocalMic();
-
-            }
-
-
-            if (!localMicStream) {
-
-                alert(
-                    "Website microphone is unavailable."
-                );
-
-                return;
-
-            }
-
-
-            talkButton.disabled = true;
-
-            talkButton.textContent =
-                "Connecting...";
-
-
-            try {
-
-                talkPC = await createTurnPeerConnection();
-
-
-                /*
-                 * Send browser microphone
-                 * to MediaMTX.
-                 */
-
-                localMicStream
-                    .getTracks()
-                    .forEach(track => {
-
-                        talkPC.addTrack(
-                            track,
-                            localMicStream
-                        );
-
-                    });
-
-
-                talkPC.onconnectionstatechange =
-                    () => {
-
-                        console.log(
-                            "Talk connection:",
-                            talkPC.connectionState
-                        );
-
-                    };
-
-
-                const offer =
-                    await talkPC.createOffer();
-
-
-                await talkPC.setLocalDescription(
-                    offer
-                );
-
-
-                await waitForICE(talkPC);
-
-
-                const response =
-                    await fetch(
-                        `${CLOUDFLARE_URL}/from_pc/whip`,
-                        {
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/sdp"
-                            },
-
-                            body:
-                                talkPC.localDescription.sdp
-                        }
-                    );
-
-
-                if (!response.ok) {
-
-                    const errorText =
-                        await response.text();
-
-                    throw new Error(
-                        `WHIP returned ${response.status}: ${errorText}`
-                    );
-
-                }
-
-
-                const answerSdp =
-                    await response.text();
-
-
-                await talkPC.setRemoteDescription(
-                    {
-                        type: "answer",
-                        sdp: answerSdp
-                    }
-                );
-
-
-                isTalking = true;
-
-                talkButton.disabled = false;
-
-                talkButton.textContent =
-                    "Stop Talking";
-
-                talkButton.classList.add(
-                    "active-talk"
-                );
-
-
-                console.log(
-                    "Website -> Pi audio connected"
-                );
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Talk connection failed:",
-                    error
-                );
-
-
-                if (talkPC) {
-
-                    talkPC.close();
-                    talkPC = null;
-
-                }
-
-
-                isTalking = false;
-
-                talkButton.disabled = false;
-
-                talkButton.textContent =
-                    "Connection Failed";
-
-
-                setTimeout(() => {
-
-                    if (!isTalking) {
-
-                        talkButton.textContent =
-                            "Click to Talk to Pi";
-
-                    }
-
-                }, 3000);
-
-            }
+    talkButton.onclick = async function() {
+
+    if (isTalking) {
+        stopTalking();
+        return;
+    }
+
+    if (!sosIncidentActive) {
+        talkButton.textContent = "No Active SOS";
+        return;
+    }
+
+    const requestId = ++talkRequestId;
+
+    talkButton.disabled = true;
+    talkButton.textContent = "Connecting...";
+
+    try {
+
+        if (!localMicStream) {
+            await initLocalMic();
+        }
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            return;
+        }
+
+        if (!localMicStream) {
+            throw new Error("Website microphone is unavailable.");
+        }
+
+        const pc = await createTurnPeerConnection();
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
+
+        talkPC = pc;
+
+        // Send browser microphone to MediaMTX.
+        localMicStream.getTracks().forEach(track => {
+            pc.addTrack(track, localMicStream);
+        });
+
+        pc.onconnectionstatechange = () => {
+
+            console.log(
+                "Talk connection:",
+                pc.connectionState
+            );
 
         };
+
+        const offer = await pc.createOffer();
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
+
+        await pc.setLocalDescription(offer);
+
+        await waitForICE(pc);
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
+
+        const response = await fetch(
+            `${CLOUDFLARE_URL}/from_pc/whip`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/sdp"
+                },
+                body: pc.localDescription.sdp
+            }
+        );
+
+        if (!response.ok) {
+
+            const errorText = await response.text();
+
+            throw new Error(
+                `WHIP returned ${response.status}: ${errorText}`
+            );
+
+        }
+
+        const answerSdp = await response.text();
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
+
+        await pc.setRemoteDescription({
+            type: "answer",
+            sdp: answerSdp
+        });
+
+        if (
+            requestId !== talkRequestId ||
+            !sosIncidentActive
+        ) {
+            pc.close();
+            return;
+        }
+
+        isTalking = true;
+
+        talkButton.disabled = false;
+        talkButton.textContent = "Stop Talking";
+
+        talkButton.classList.add("active-talk");
+
+        console.log("Website -> Pi audio connected");
+
+    } catch (error) {
+
+        if (requestId !== talkRequestId) return;
+
+        console.error("Talk connection failed:", error);
+
+        if (talkPC) {
+            talkPC.close();
+            talkPC = null;
+        }
+
+        isTalking = false;
+
+        talkButton.disabled = false;
+        talkButton.textContent = "Connection Failed";
+
+        setTimeout(() => {
+
+            if (!isTalking && !sosIncidentActive) {
+                talkButton.textContent = "Click to Talk to Pi";
+            } else if (!isTalking) {
+                talkButton.textContent = "Click to Talk to Pi";
+            }
+
+        }, 3000);
+
+    }
+
+};
 
 
     /*
@@ -1702,24 +1673,58 @@ function stopCamera() {
 
     function stopTalking() {
 
-        if (talkPC) {
+    // Invalidate any ongoing speaker connection attempt.
+    talkRequestId++;
 
-            talkPC.close();
-            talkPC = null;
-
-        }
-
-
-        isTalking = false;
-
-        talkButton.textContent =
-            "Click to Talk to Pi";
-
-        talkButton.classList.remove(
-            "active-talk"
-        );
-
+    if (talkPC) {
+        talkPC.close();
+        talkPC = null;
     }
+
+    isTalking = false;
+
+    talkButton.disabled = false;
+    talkButton.textContent = "Click to Talk to Pi";
+
+    talkButton.classList.remove("active-talk");
+
+    console.log("Website microphone disconnected from Pi.");
+
+}
+
+function stopAudioConnections() {
+
+    // Stop Raspberry Pi microphone -> website.
+    stopPiMicrophone();
+
+    // Stop website microphone -> Raspberry Pi speaker.
+    stopTalking();
+
+    // Release the browser microphone hardware.
+    if (localMicStream) {
+
+        localMicStream.getTracks().forEach(track => {
+            track.stop();
+        });
+
+        localMicStream = null;
+    }
+
+    isListening = false;
+    isTalking = false;
+
+    listenButton.disabled = false;
+    talkButton.disabled = false;
+
+    listenButton.textContent = "Enable Pi Microphone";
+    talkButton.textContent = "Click to Talk to Pi";
+
+    listenButton.classList.remove("active-listen");
+    talkButton.classList.remove("active-talk");
+
+    console.log("All audio connections stopped.");
+
+}
 
 
     /*
@@ -1793,6 +1798,8 @@ function stopCamera() {
 </body>
 </html>
 <!-- Raspberry Pi GitHub automation test -->
+
+
 
 
 
