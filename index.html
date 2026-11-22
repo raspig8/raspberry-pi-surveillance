@@ -1,1441 +1,460 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Raspberry Pi Surveillance & Audio</title>
-
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-        background-color: #f4f4f9;
-        margin: 30px 0;
-    }
-
-    .container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .video-container {
-        width: 640px;
-        max-width: 95vw;
-    }
-
-    video {
-        width: 100%;
-        background: black;
-        border: 2px solid #ccc;
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-
-    .status {
-        padding: 8px 15px;
-        border-radius: 5px;
-        background: #eee;
-        font-size: 14px;
-    }
-
-    .controls {
-        margin: 10px 0;
-    }
-
-    button {
-        padding: 12px 24px;
-        font-size: 16px;
-        font-weight: bold;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-
-    #talkButton {
-        background-color: #d9534f;
-    }
-
-    #talkButton.active-talk {
-        background-color: #28a745;
-    }
-
-    #listenButton {
-        background-color: #337ab7;
-    }
-
-    #listenButton.active-listen {
-        background-color: #28a745;
-    }
-
-    #notificationButton {
-        background-color: #5b6573;
-    }
-
-    #notificationButton.enabled {
-        background-color: #28a745;
-    }
-
-    button:disabled {
-        background-color: #777;
-        cursor: not-allowed;
-    }
-
-    .map-box {
-        margin-top: 20px;
-    }
-
-    
-/* =========================================
-   PROFESSIONAL POLICE DASHBOARD COMPONENTS a
-   ========================================= */
-
-:root {
-    --police-navy: #172b45;
-    --police-blue: #245b91;
-    --police-blue-hover: #1b4977;
-    --panel-background: #ffffff;
-    --surface-background: #f3f6fa;
-    --border-color: #d6dee8;
-    --text-primary: #1d2939;
-    --text-secondary: #5d6b7d;
-    --status-background: #edf3f9;
-}
-
-/* Device Location and stream section headings */
-.section-heading {
-    color: var(--police-navy);
-    font-size: 1.2rem;
-    font-weight: 700;
-    line-height: 1.4;
-    margin: 0 0 18px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid var(--border-color);
-    letter-spacing: 0.01em;
-}
-
-/* Extra separation before the live camera section */
-.stream-heading {
-    margin-top: 28px;
-}
-
-
-
-/* SOS driver selection panel */
-.driver-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 8px 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-    border-radius: 0;
-}
-
-.driver-selector label {
-    color: #ffffff !important;
-    margin: 0;
-    white-space: nowrap;
-}
-
-.driver-selector select {
-    width: auto;
-    max-width: 180px;
-    padding: 6px 8px;
-}
-
-.driver-selector select:hover {
-    border-color: var(--police-blue);
-}
-
-.driver-selector select:focus-visible {
-    outline: 3px solid rgba(36, 91, 145, 0.2);
-    border-color: var(--police-blue);
-}
-
-/* Camera connection status */
-#cameraStatus {
-    box-sizing: border-box;
-    width: 100%;
-    padding: 11px 14px;
-    margin-top: 12px;
-
-    background: var(--surface-background);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    line-height: 1.5;
-}
-
-/* Camera frame */
-.video-container {
-    overflow: hidden;
-    background: #101820;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
-}
-
-#cameraVideo {
-    display: block;
-    width: 100%;
-    height: auto;
-    min-height: 220px;
-    max-height: 560px;
-    object-fit: contain;
-    background: #101820;
-}
-
-/* Mobile layout */
-@media (max-width: 600px) {
-    .section-heading {
-        font-size: 1.08rem;
-        margin-bottom: 16px;
-    }
-
-    .stream-heading {
-        margin-top: 24px;
-    }
-
-    .driver-selector {
-        padding: 13px;
-    }
-
-    #cameraVideo {
-        min-height: 180px;
-    }
-}
-
+body{font-family:Arial,sans-serif;text-align:center;background:#f4f4f9;color:#1d2939;margin:30px 0}
+.container{display:flex;flex-direction:column;align-items:center;gap:15px}
+h3{color:#172b45;border-bottom:2px solid #d6dee8;padding-bottom:10px;margin:20px 0 0}
+.status{padding:8px 15px;border-radius:5px;background:#eee;font-size:14px;max-width:95vw}
+.alert{background:#fde2e1;color:#b42318;font-weight:bold}
+.video-container{width:640px;max-width:95vw;background:#101820;border-radius:8px;overflow:hidden}
+video{display:block;width:100%;min-height:220px;max-height:560px;object-fit:contain}
+.driver-selector{display:flex;align-items:center;gap:8px;padding:8px;color:#fff}
+button{padding:12px 24px;font-size:16px;font-weight:bold;color:#fff;background:#337ab7;border:none;border-radius:5px;cursor:pointer}
+#talkButton{background:#d9534f}
+button.on,#talkButton.on{background:#28a745}
+button:disabled,#talkButton:disabled{background:#777;cursor:not-allowed}
+#logoutButton{padding:4px 10px;font-size:13px;margin-left:8px;background:#5b6573}
+#login{position:fixed;inset:0;z-index:9;display:flex;justify-content:center;align-items:center;background:#101827;color:#fff}
+#login form{width:350px;max-width:90%;padding:30px;border-radius:12px;background:#1e293b}
+#login input,#login button{width:100%;box-sizing:border-box;padding:12px;margin:8px 0}
+#loginError{color:#f87171;min-height:1em}
 </style>
-
 </head>
-
 <body>
 
-<div id="policeLoginScreen" style="
-    position: fixed;
-    inset: 0;
-    z-index: 999999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #101827;
-    color: white;
-    font-family: Arial, sans-serif;
-">
-    <div style="
-        width: 350px;
-        max-width: 90%;
-        padding: 30px;
-        border-radius: 12px;
-        background: #1e293b;
-        text-align: center;
-    ">
+<div id="login">
+    <form id="loginForm">
         <h2>Police Officer Login</h2>
         <p>Emergency Surveillance System</p>
-
-        <form id="policeLoginForm">
-            <input type="text" placeholder="Enter username" required
-                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;">
-
-            <input type="password" placeholder="Enter password" required
-                style="width:100%;box-sizing:border-box;padding:12px;margin:10px 0;">
-
-            <button type="submit" style="
-                width:100%;
-                padding:12px;
-                margin-top:10px;
-                background:#2563eb;
-                color:white;
-                border:none;
-                border-radius:6px;
-                cursor:pointer;
-                font-size:16px;
-            ">Login</button>
-        </form>
-    </div>
+        <input id="username" placeholder="Enter username" autocomplete="username" required>
+        <input id="password" type="password" placeholder="Enter password" autocomplete="current-password" required>
+        <button type="submit">Login</button>
+        <p id="loginError"></p>
+    </form>
 </div>
-
-<script>
-document.getElementById("policeLoginForm").addEventListener("submit", function(event) {
-    event.preventDefault();
-    document.getElementById("policeLoginScreen").style.display = "none";
-});
-</script>
-```
-
-
 
 <div class="container">
+    <div class="status"><span id="officerInfo">Not logged in</span><button id="logoutButton">Logout</button></div>
 
-<h3 class="section-heading stream-heading">
-    Live Raspberry Pi Stream
-</h3>
+    <h3>Live Raspberry Pi Stream</h3>
+    <div id="sosStatus" class="status">No active SOS</div>
 
-<!-- =====================================================
-     SOS Notification
-     ===================================================== -->
-<script>
-document.addEventListener("DOMContentLoaded", async function () {
-    if (!("Notification" in window)) {
-        console.log("This browser does not support notifications.");
-        return;
-    }
-
-    if (Notification.permission === "granted") {
-        console.log("SOS notifications are permitted.");
-        return;
-    }
-
-    if (Notification.permission === "denied") {
-        console.log("Notifications are blocked in browser settings.");
-        return;
-    }
-
-    try {
-        const permission = await Notification.requestPermission();
-
-        if (permission === "granted") {
-            console.log("SOS notifications are permitted.");
-        } else {
-            console.log("SOS notification permission was not granted.");
-        }
-    } catch (error) {
-        console.error("Notification permission error:", error);
-    }
-});
-
-
-</script>
-```
-
-<!-- =====================================================
-     CAMERA + CAMERA AUDIO
-     ===================================================== -->
-
-<div class="video-container">
-
-    
-    <div class="driver-selector">
-        <label for="driverSelect">SOS Emergency Driver:</label>
-
-        <select id="driverSelect">
-            <option value="">No active SOS</option>
-        </select>
+    <div class="video-container">
+        <div class="driver-selector">
+            <label for="driverSelect">SOS Emergency Driver:</label>
+            <select id="driverSelect"><option value="">No active SOS</option></select>
+        </div>
+        <video id="cameraVideo" autoplay playsinline controls></video>
     </div>
+    <div id="cameraStatus" class="status">Camera disconnected</div>
 
+    <button id="listenButton" disabled>Enable Pi Microphone</button>
+    <audio id="piAudio" autoplay playsinline></audio>
+    <button id="talkButton" disabled>Click to Talk to Pi</button>
 
-    <video
-        id="cameraVideo"
-        autoplay
-        playsinline
-        controls>
-    </video>
+    <!-- GOOGLE MAPS - DO NOT CHANGE -->
+    <div class="map-box">
+        <h3 class="section-heading">Device Location</h3>
 
-</div>
+        <iframe
+            id="gps-map"
+            src="https://www.google.com/maps?q=13.916045,121.141089&output=embed"
+            width="640"
+            height="250"
+            style="border:0; max-width:100%;"
+            allowfullscreen
+            loading="lazy">
+        </iframe>
 
-<div id="cameraStatus" class="status">
-    Connecting to Raspberry Pi camera...
-</div>
-
-
-<!-- =====================================================
-     PI MICROPHONE -> WEBSITE
-     ===================================================== -->
-
-<div class="controls">
-
-    <button id="listenButton">
-        Enable Pi Microphone
-    </button>
-
-</div>
-
-<audio
-    id="piAudio"
-    autoplay
-    playsinline>
-</audio>
-
-
-<!-- =====================================================
-     WEBSITE MICROPHONE -> PI SPEAKER
-     ===================================================== -->
-
-<div class="controls">
-
-    <button id="talkButton">
-        Click to Talk to Pi
-    </button>
-
-</div>
-
-
-<!-- =====================================================
-     GOOGLE MAPS
-     DO NOT CHANGE
-     ===================================================== -->
-
-
-<div class="map-box">
-    <h3 class="section-heading">Device Location</h3>
-
-    <iframe
-        id="gps-map"
-        src="https://www.google.com/maps?q=13.916045,121.141089&output=embed"
-        width="640"
-        height="250"
-        style="border:0; max-width:100%;"
-        allowfullscreen
-        loading="lazy">
-    </iframe>
-
-    <p id="gps-status">Waiting for GPS location...</p>
+        <p id="gps-status">Waiting for GPS location...</p>
+    </div>
 </div>
 
 <script>
-async function updateGPSMap() {
-    const status = document.getElementById("gps-status");
-    const map = document.getElementById("gps-map");
+// Cloudflare tunnel to server.py on the Pi (cloudflared tunnel --url http://localhost:5000)
+const PI_API_URL = "https://YOUR-PI-API-TUNNEL.trycloudflare.com";
+// Cloudflare tunnel to MediaMTX (camera / mic / talk-back)
+const CLOUDFLARE_URL = "https://avi-mechanisms-roland-enjoying.trycloudflare.com";
+const POLL_MS = 1000;
+const MAP_REFRESH_MS = 5000;
 
+const $ = id => document.getElementById(id);
+const driverSelect = $("driverSelect"), cameraVideo = $("cameraVideo"), cameraStatus = $("cameraStatus");
+const sosStatus = $("sosStatus"), piAudio = $("piAudio"), listenButton = $("listenButton");
+const talkButton = $("talkButton"), gpsMap = $("gps-map"), gpsStatus = $("gps-status");
+
+let token = localStorage.getItem("piToken");
+let sos = { state: "none" };
+let pollTimer = null, polling = false, accepting = false;
+let cameraPC = null, piMicPC = null, talkPC = null, localMicStream = null;
+let cameraStarting = false, cameraRequestId = 0, cameraRetryTimer = null;
+let lastMapKey = "", lastMapUpdate = 0, holdUntil = 0;
+
+/* ---------------- Pi API ---------------- */
+async function api(path, options = {}) {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = "Bearer " + token;
+    let res;
     try {
-        const response = await fetch("/api/location", {
-            cache: "no-store"
+        res = await fetch(PI_API_URL + path, { ...options, headers, cache: "no-store", signal: AbortSignal.timeout(8000) });
+    } catch {
+        throw new Error("Raspberry Pi server is unreachable");
+    }
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && path !== "/login") showLogin("Session expired. Please log in again.");
+    if (!res.ok) throw new Error(data.error || "Pi server returned HTTP " + res.status);
+    return data;
+}
+
+/* ---------------- Login ---------------- */
+$("loginForm").onsubmit = async e => {
+    e.preventDefault();
+    $("loginError").textContent = "Logging in...";
+    try {
+        const data = await api("/login", {
+            method: "POST",
+            body: JSON.stringify({ username: $("username").value, password: $("password").value })
         });
+        token = data.token;
+        localStorage.setItem("piToken", token);
+        $("password").value = "";
+        $("officerInfo").textContent = "Logged in: " + data.station;
+        startDashboard();
+    } catch (err) {
+        $("loginError").textContent = err.message;
+    }
+};
 
-        if (!response.ok) {
-            throw new Error("API returned HTTP " + response.status);
-        }
+$("logoutButton").onclick = async () => {
+    await api("/logout", { method: "POST" }).catch(() => {});
+    showLogin("");
+};
 
-        const data = await response.json();
+function showLogin(message) {
+    token = null;
+    localStorage.removeItem("piToken");
+    clearInterval(pollTimer);
+    pollTimer = null;
+    endSosMedia();
+    sos = { state: "none" };
+    render();
+    $("login").style.display = "flex";
+    $("loginError").textContent = message || "";
+}
 
-        // Support the API response format:
-        // { success: true, location: { latitude, longitude } }
-        const location = data.location || data;
-
-        if (
-            !location ||
-            !Number.isFinite(Number(location.latitude)) ||
-            !Number.isFinite(Number(location.longitude))
-        ) {
-            throw new Error("GPS coordinates are missing or invalid");
-        }
-
-        const latitude = Number(location.latitude);
-        const longitude = Number(location.longitude);
-
-        map.src =
-            "https://www.google.com/maps?q=" +
-            latitude + "," + longitude + "&output=embed";
-
-        status.textContent =
-            "Location: " + latitude.toFixed(6) + ", " +
-            longitude.toFixed(6);
-
-    } catch (error) {
-        status.textContent = "Unable to retrieve GPS location: " + error.message;
-        console.error("GPS map update failed:", error);
+function startDashboard() {
+    $("login").style.display = "none";
+    if (!pollTimer) {
+        poll();
+        pollTimer = setInterval(poll, POLL_MS);
     }
 }
 
-updateGPSMap();
-setInterval(updateGPSMap, 5000);
-</script>
-<script>
-/*
- * SOS BROWSER NOTIFICATIONS
- * Polls /api/incident and notifies on a new inactive -> active transition.
- */
-(() => {
-    const notificationButton = document.getElementById("notificationButton");
-    const notificationStatus = document.getElementById("notificationStatus");
-
-    let lastIncidentActive = null;
-    let checkingIncident = false;
-
-async function updateNotificationButton() {
-    if (!("Notification" in window)) {
-        console.log("This browser does not support notifications.");
-        return;
-    }
-
-    if (Notification.permission === "granted") {
-        console.log("SOS browser notifications are enabled.");
-        return;
-    }
-
-    if (Notification.permission === "denied") {
-        console.log("Notifications are blocked in browser settings.");
-        return;
-    }
-
+/* ---------------- SOS polling ---------------- */
+async function poll() {
+    if (polling || !token) return;
+    polling = true;
     try {
-        const permission = await Notification.requestPermission();
+        const data = await api("/status");
+        const prev = sos;
+        sos = data.sos || { state: "none" };
+        $("officerInfo").textContent = "Logged in: " + data.station;
 
-        if (permission === "granted") {
-            console.log("SOS browser notifications are enabled.");
-        } else {
-            console.log("SOS notification permission was not granted.");
+        if (sos.state === "offered" && (prev.state !== "offered" || prev.id !== sos.id)) notify(sos.reason);
+        if (prev.state === "accepted" && sos.state !== "accepted") endSosMedia();
+        if (prev.state !== "accepted" && sos.state === "accepted") startCamera();
+        if (prev.state === "offered" && sos.state === "none" && !accepting) {
+            flash("SOS passed to the next station (not accepted in time).");
         }
-    } catch (error) {
-        console.error("Notification permission request failed:", error);
+        render();
+    } catch (err) {
+        if (token) sosStatus.textContent = "Connection problem: " + err.message;
+    } finally {
+        polling = false;
     }
 }
 
+function flash(message) {
+    sosStatus.textContent = message;
+    holdUntil = Date.now() + 5000;
+}
 
+function render() {
+    const active = sos.state !== "none";
+    let option = driverSelect.querySelector('option[value="driver1"]');
 
-    async function checkIncidentStatus() {
-        if (checkingIncident) return;
-        checkingIncident = true;
-
-        try {
-            const response = await fetch("/api/incident", {
-                method: "GET",
-                cache: "no-store"
-            });
-
-            if (!response.ok) {
-                throw new Error("Incident API returned HTTP " + response.status);
-            }
-
-            const incident = await response.json();
-            const isActive = incident.active === true;
-            sosIncidentActive = isActive;
-
-            
-            updateDriverDropdown(isActive);
-
-            if (!isActive && (cameraPC || cameraStartInProgress)) {
-                stopCamera();
-            }
-
-            
-
-
-
-            // Establish a baseline on page load to avoid a duplicate alert
-            // just because the dashboard opened during an existing incident.
-            if (lastIncidentActive === null) {
-                lastIncidentActive = isActive;
-                return;
-            }
-
-            if (!lastIncidentActive && isActive) {
-                if ("Notification" in window &&
-                    Notification.permission === "granted") {
-                    const reason = typeof incident.reason === "string" &&
-                        incident.reason.trim()
-                        ? "Reason: " + incident.reason.trim()
-                        : "An incident has been detected.";
-
-                    new Notification("SOS — Helmet Emergency", {
-                        body: reason + " Open your dashboard to check the GPS location and live camera.",
-                        tag: "helmet-sos-incident",
-                        requireInteraction: true
-                    });
-                } else {
-                    console.warn(
-                        "SOS incident detected, but browser notifications are not enabled."
-                    );
-                }
-            }
-
-            lastIncidentActive = isActive;
-        } catch (error) {
-            console.error("SOS incident status check failed:", error);
-        } finally {
-            checkingIncident = false;
-        }
-    }
-
-    updateNotificationButton();
-    checkIncidentStatus();
-    setInterval(checkIncidentStatus, 2000);
-})();
-</script>
-
-
-</div>
-
-<script>
-
-    /*
-     * =========================================================
-     * CONFIGURATION
-     * =========================================================
-     */
-
-    const CLOUDFLARE_URL =
-        "https://avi-mechanisms-roland-enjoying.trycloudflare.com";
-
-
-    /*
-     * =========================================================
-     * ELEMENTS
-     * =========================================================
-     */
-
-    const cameraVideo =
-        document.getElementById("cameraVideo");
-
-    const cameraStatus =
-        document.getElementById("cameraStatus");
-
-    const piAudio =
-        document.getElementById("piAudio");
-
-    const listenButton =
-        document.getElementById("listenButton");
-
-    const talkButton =
-        document.getElementById("talkButton");
-
-
-    /*
-     * =========================================================
-     * CONNECTION VARIABLES
-     * =========================================================
-     */
-
-    let cameraPC = null;
-    let piMicPC = null;
-    let talkPC = null;
-
-    let localMicStream = null;
-
-    let isTalking = false;
-    let isListening = false;
-    let sosIncidentActive = false;
-
-    
-const driverSelect = document.getElementById("driverSelect");
-
-function updateDriverDropdown(isActive) {
-    const driverOption = driverSelect.querySelector(
-        'option[value="driver1"]'
-    );
-
-    if (isActive && !driverOption) {
-        const option = document.createElement("option");
-        option.value = "driver1";
-        option.textContent = "Driver 1";
-
-        driverSelect.appendChild(option);
+    if (active && !option) {
+        driverSelect.add(new Option("Driver 1", "driver1"));
         driverSelect.options[0].textContent = "Select a driver";
     }
-
-    if (!isActive && driverOption) {
-        // Reset selection before removing the driver.
-        driverSelect.value = "";
-        driverOption.remove();
+    if (!active && option) {
+        option.remove();
         driverSelect.options[0].textContent = "No active SOS";
     }
+    if (!active) driverSelect.value = "";
+    if (sos.state === "accepted") driverSelect.value = "driver1";
 
-    if (!isActive) {
-        driverSelect.value = "";
+    sosStatus.classList.toggle("alert", sos.state === "offered");
+    if (sos.state === "offered") {
+        sosStatus.textContent = `SOS! Select "Driver 1" within ${sos.expiresIn}s to accept.`;
+    } else if (sos.state === "accepted") {
+        sosStatus.textContent = "You accepted this SOS. Reason: " + (sos.reason || "not given") +
+            '. Change the dropdown back to "Select a driver" when it is resolved.';
+    } else if (Date.now() > holdUntil) {
+        sosStatus.textContent = "No active SOS";
     }
+
+    const accepted = sos.state === "accepted";
+    if (!piMicPC) listenButton.disabled = !accepted;
+    if (!talkPC) talkButton.disabled = !accepted;
+    updateMap(accepted ? sos.location : null);
 }
 
-
-driverSelect.addEventListener("change", () => {
-    if (driverSelect.value === "driver1" &&
-        sosIncidentActive === true) {
-        startCamera();
-    } else {
-        stopCamera();
-    }
-});
-
-
-
-
-    /*
-     * =========================================================
-     * GENERIC WHEP FUNCTION
-     *
-     * Used for:
-     *
-     *     /cam/whep
-     *     /mic/whep
-     *
-     * =========================================================
-     */
-
-
-async function createTurnPeerConnection() {
-
-    const response = await fetch("/api/ice");
-
-    if (!response.ok) {
-        throw new Error("Failed to obtain TURN credentials");
-    }
-
-    const data = await response.json();
-
-    if (!data.iceServers || !Array.isArray(data.iceServers)) {
-        throw new Error("Invalid TURN credentials response");
-    }
-
-    return new RTCPeerConnection({
-        iceServers: data.iceServers
-    });
-
-}
-
-
-    async function connectWHEP(path, mode, onTrack) {
-
-        const pc = await createTurnPeerConnection();
-
-        pc.onconnectionstatechange = () => {
-
-            console.log(
-                path,
-                "connection state:",
-                pc.connectionState
-            );
-
-        };
-
-        pc.oniceconnectionstatechange = () => {
-
-            console.log(
-                path,
-                "ICE state:",
-                pc.iceConnectionState
-            );
-
-        };
-
-        pc.ontrack = onTrack;
-
-        pc.addTransceiver(
-            mode,
-            {
-                direction: "recvonly"
-            }
-        );
-
-        const offer =
-            await pc.createOffer();
-
-        await pc.setLocalDescription(offer);
-
-
-        /*
-         * Wait for ICE gathering.
-         */
-
-        await waitForICE(pc);
-
-
-        const response =
-            await fetch(
-                `${CLOUDFLARE_URL}${path}/whep`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/sdp"
-                    },
-
-                    body:
-                        pc.localDescription.sdp
-                }
-            );
-
-
-        if (!response.ok) {
-
-            const errorText =
-                await response.text();
-
-            throw new Error(
-                `${path}/whep returned ${response.status}: ${errorText}`
-            );
-
-        }
-
-
-        const answerSdp =
-            await response.text();
-
-
-        await pc.setRemoteDescription(
-            {
-                type: "answer",
-                sdp: answerSdp
-            }
-        );
-
-
-        return pc;
-    }
-
-
-    /*
-     * =========================================================
-     * ICE GATHERING
-     * =========================================================
-     */
-
-    function waitForICE(pc) {
-
-        return new Promise(resolve => {
-
-            if (pc.iceGatheringState === "complete") {
-
-                resolve();
-                return;
-
-            }
-
-            function checkState() {
-
-                if (
-                    pc.iceGatheringState === "complete"
-                ) {
-
-                    pc.removeEventListener(
-                        "icegatheringstatechange",
-                        checkState
-                    );
-
-                    resolve();
-
-                }
-
-            }
-
-            pc.addEventListener(
-                "icegatheringstatechange",
-                checkState
-            );
-
-        });
-
-    }
-
-
-    /*
-     * =========================================================
-     * CAMERA
-     *
-     * Pi camera -> MediaMTX -> WebRTC -> browser
-     *
-     * Path:
-     *
-     *     /cam/whep
-     *
-     * =========================================================
-     */
-
-
-let cameraStartInProgress = false;
-let cameraRequestId = 0;
-
-
-async function startCamera() {
-    if (cameraStartInProgress) return;
-
-    if (cameraPC &&
-        ["new", "connecting", "connected"].includes(
-            cameraPC.connectionState
-        )) {
-        return;
-    }
-
-    if (sosIncidentActive !== true ||
-        driverSelect.value !== "driver1") {
-        cameraStatus.textContent =
-            "Select Driver 1 during an active SOS to connect";
-        return;
-    }
-
-    cameraStartInProgress = true;
-    const requestId = ++cameraRequestId;
-
+function notify(reason) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
     try {
-        cameraStatus.textContent = "Checking SOS status...";
-
-        const response = await fetch("/api/incident", {
-            method: "GET",
-            cache: "no-store"
+        new Notification("SOS — Helmet Emergency", {
+            body: (reason || "An incident has been detected.") + ' Select "Driver 1" within 15 seconds to accept.',
+            tag: "helmet-sos-incident",
+            requireInteraction: true
         });
+    } catch (err) {
+        console.error("Notification failed:", err);
+    }
+}
 
-        if (!response.ok) {
-            throw new Error(
-                "Incident API returned HTTP " + response.status
-            );
-        }
+/* ---------------- Dropdown: select = accept, deselect = resolve ---------------- */
+driverSelect.onchange = async () => {
+    if (driverSelect.value !== "driver1") return resolveSos();
+    if (sos.state !== "offered" || accepting) return;
 
-        const incident = await response.json();
+    accepting = true;
+    sosStatus.textContent = "Accepting SOS...";
+    try {
+        await api("/accept", { method: "POST", body: JSON.stringify({ sosId: sos.id }) });
+        sos.state = "accepted";
+        render();
+        startCamera();
+    } catch (err) {
+        driverSelect.value = "";
+        flash("Could not accept: " + err.message);
+    } finally {
+        accepting = false;
+    }
+};
 
-        if (incident.active !== true) {
-            cameraStatus.textContent =
-                "Camera unavailable — no active SOS";
-            return;
-        }
+async function resolveSos() {
+    if (sos.state !== "accepted") return;
+    try {
+        await api("/resolve", { method: "POST", body: JSON.stringify({ sosId: sos.id }) });
+        endSosMedia();
+        sos = { state: "none" };
+        render();
+        flash("SOS resolved.");
+    } catch (err) {
+        driverSelect.value = "driver1";
+        flash("Could not resolve: " + err.message);
+    }
+}
 
-        if (requestId !== cameraRequestId) return;
+/* ---------------- GPS map (accepting officer only) ---------------- */
+function updateMap(loc) {
+    if (sos.state !== "accepted") {
+        gpsStatus.textContent = "GPS is shown only to the station handling the SOS.";
+        return;
+    }
+    if (!loc || !Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) {
+        gpsStatus.textContent = "Waiting for a GPS fix from the helmet...";
+        return;
+    }
+    const key = loc.latitude.toFixed(6) + "," + loc.longitude.toFixed(6);
+    gpsStatus.textContent = "Location: " + key.replace(",", ", ");
+    if (key !== lastMapKey && Date.now() - lastMapUpdate >= MAP_REFRESH_MS) {
+        gpsMap.src = "https://www.google.com/maps?q=" + key + "&output=embed";
+        lastMapKey = key;
+        lastMapUpdate = Date.now();
+    }
+}
 
+/* ---------------- WebRTC helpers ---------------- */
+async function createTurnPeerConnection() {
+    const res = await fetch("/api/ice");
+    if (!res.ok) throw new Error("Failed to obtain TURN credentials");
+    const data = await res.json();
+    if (!Array.isArray(data.iceServers)) throw new Error("Invalid TURN credentials response");
+    return new RTCPeerConnection({ iceServers: data.iceServers });
+}
+
+function waitForICE(pc, ms = 5000) {
+    return new Promise(resolve => {
+        if (pc.iceGatheringState === "complete") return resolve();
+        const timer = setTimeout(resolve, ms);
+        pc.addEventListener("icegatheringstatechange", () => {
+            if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
+        });
+    });
+}
+
+async function negotiate(pc, url) {
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitForICE(pc);
+    const res = await fetch(url, {
+        method: "POST",
+        // MediaMTX asks server.py whether this officer may access the stream.
+        headers: { "Content-Type": "application/sdp", "Authorization": "Basic " + btoa("officer:" + token) },
+        body: pc.localDescription.sdp,
+        signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) throw new Error(`${url} returned ${res.status}: ${await res.text()}`);
+    await pc.setRemoteDescription({ type: "answer", sdp: await res.text() });
+}
+
+async function connectWHEP(path, kind, onTrack) {
+    const pc = await createTurnPeerConnection();
+    try {
+        pc.ontrack = onTrack;
+        pc.addTransceiver(kind, { direction: "recvonly" });
+        await negotiate(pc, `${CLOUDFLARE_URL}${path}/whep`);
+        return pc;
+    } catch (err) {
+        pc.close();
+        throw err;
+    }
+}
+
+/* ---------------- Camera ---------------- */
+async function startCamera() {
+    if (cameraStarting || cameraPC) return;
+    if (sos.state !== "accepted") {
+        cameraStatus.textContent = "Accept the SOS to view the camera";
+        return;
+    }
+    cameraStarting = true;
+    const id = ++cameraRequestId;
+    try {
         cameraStatus.textContent = "Connecting to camera...";
-
-        const pc = await connectWHEP(
-            "/cam",
-            "video",
-            event => {
-                // Do not reference pc here: this callback can run
-                // before connectWHEP() returns the peer connection.
-                if (requestId !== cameraRequestId) {
-                    console.log("Ignoring obsolete camera track.");
-                    return;
-                }
-
-                console.log("Camera track received:", event.track.kind);
-
-                const stream = event.streams[0] ||
-                    new MediaStream([event.track]);
-
-                cameraVideo.srcObject = stream;
-
-                cameraVideo.play().then(() => {
-                    console.log(
-                        "Camera playback started. Video dimensions:",
-                        cameraVideo.videoWidth,
-                        "x",
-                        cameraVideo.videoHeight
-                    );
-                }).catch(err => {
-                    console.error("Camera playback failed:", err);
-                    cameraStatus.textContent =
-                        "Connected, but video playback failed";
-                });
+        const pc = await connectWHEP("/cam", "video", e => {
+            if (id !== cameraRequestId) return;
+            cameraVideo.srcObject = e.streams[0] || new MediaStream([e.track]);
+            cameraVideo.play().catch(() => cameraStatus.textContent = "Connected, but video playback failed");
+        });
+        if (id !== cameraRequestId) return pc.close();
+        pc.onconnectionstatechange = () => {
+            if (cameraPC === pc && ["failed", "closed"].includes(pc.connectionState)) {
+                stopCamera();
+                retryCamera("Camera connection lost");
             }
-        );
-
-        if (requestId !== cameraRequestId) {
-            pc.close();
-            return;
-        }
-
+        };
         cameraPC = pc;
         cameraStatus.textContent = "Camera connected";
-
-        console.log("Camera connected successfully");
-
-    } catch (error) {
-        if (requestId === cameraRequestId) {
-            console.error("Camera connection failed:", error);
-            cameraStatus.textContent = "Camera connection failed";
+    } catch (err) {
+        if (id === cameraRequestId) {
+            console.error("Camera connection failed:", err);
+            retryCamera("Camera connection failed: " + err.message);
         }
     } finally {
-        cameraStartInProgress = false;
+        cameraStarting = false;
     }
 }
 
-
-function pcIsObsolete(pc) {
-    return pc.connectionState === "closed";
+function retryCamera(message) {
+    cameraStatus.textContent = message + ". Retrying in 5 s...";
+    clearTimeout(cameraRetryTimer);
+    cameraRetryTimer = setTimeout(() => { if (sos.state === "accepted") startCamera(); }, 5000);
 }
-
 
 function stopCamera() {
-    // Invalidate any camera connection attempt still in progress.
+    clearTimeout(cameraRetryTimer);
     cameraRequestId++;
-
-    if (cameraPC) {
-        cameraPC.close();
-        cameraPC = null;
-    }
-
-    cameraVideo.pause();
+    if (cameraPC) { cameraPC.close(); cameraPC = null; }
     cameraVideo.srcObject = null;
-
-    cameraStatus.textContent =
-        "Camera disconnected — no active SOS";
-
-    console.log("Camera disconnected because SOS is inactive.");
-
-    
+    cameraStatus.textContent = "Camera disconnected";
 }
 
-
-
-    /*
-     * =========================================================
-     * PI MICROPHONE -> WEBSITE
-     *
-     * Path:
-     *
-     *     /mic/whep
-     *
-     * =========================================================
-     */
-
-    listenButton.onclick =
-        async function() {
-
-            if (isListening) {
-
-                stopPiMicrophone();
-
-                return;
-
-            }
-
-
-            listenButton.disabled = true;
-
-            listenButton.textContent =
-                "Connecting...";
-
-
-            try {
-
-                piMicPC =
-                    await connectWHEP(
-                        "/mic",
-                        "audio",
-
-                        event => {
-
-                            console.log(
-                                "Pi microphone track received"
-                            );
-
-                            piAudio.srcObject =
-                                event.streams[0];
-
-                            piAudio.volume = 1.0;
-
-                            piAudio.play()
-                                .catch(err => {
-
-                                    console.log(
-                                        "Audio playback blocked:",
-                                        err
-                                    );
-
-                                });
-
-                        }
-                    );
-
-
-                isListening = true;
-
-                listenButton.disabled = false;
-
-                listenButton.textContent =
-                    "Stop Pi Microphone";
-
-                listenButton.classList.add(
-                    "active-listen"
-                );
-
-
-                console.log(
-                    "Pi microphone connected"
-                );
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Pi microphone connection failed:",
-                    error
-                );
-
-                listenButton.disabled = false;
-
-                listenButton.textContent =
-                    "Pi Microphone Failed";
-
-            }
-
-        };
-
-
-    /*
-     * =========================================================
-     * STOP PI MICROPHONE
-     * =========================================================
-     */
-
-    function stopPiMicrophone() {
-
-        if (piMicPC) {
-
-            piMicPC.close();
-            piMicPC = null;
-
-        }
-
-        piAudio.srcObject = null;
-
-        isListening = false;
-
-        listenButton.textContent =
-            "Enable Pi Microphone";
-
-        listenButton.classList.remove(
-            "active-listen"
-        );
-
+/* ---------------- Pi microphone -> website ---------------- */
+listenButton.onclick = async () => {
+    if (piMicPC) return stopPiMicrophone();
+    if (sos.state !== "accepted") return;
+    listenButton.disabled = true;
+    listenButton.textContent = "Connecting...";
+    try {
+        piMicPC = await connectWHEP("/mic", "audio", e => {
+            piAudio.srcObject = e.streams[0];
+            piAudio.play().catch(err => console.log("Audio playback blocked:", err));
+        });
+        listenButton.textContent = "Stop Pi Microphone";
+        listenButton.classList.add("on");
+    } catch (err) {
+        console.error("Pi microphone connection failed:", err);
+        stopPiMicrophone();
+        listenButton.textContent = "Pi Microphone Failed";
+    } finally {
+        listenButton.disabled = sos.state !== "accepted";
     }
+};
 
+function stopPiMicrophone() {
+    if (piMicPC) { piMicPC.close(); piMicPC = null; }
+    piAudio.srcObject = null;
+    listenButton.textContent = "Enable Pi Microphone";
+    listenButton.classList.remove("on");
+}
 
-    /*
-     * =========================================================
-     * GET WEBSITE MICROPHONE
-     * =========================================================
-     */
-
-    async function initLocalMic() {
-
-        try {
-
-            localMicStream =
-                await navigator.mediaDevices.getUserMedia(
-                    {
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        }
-                    }
-                );
-
-
-            console.log(
-                "Website microphone ready"
-            );
-
+/* ---------------- Website microphone -> Pi speaker ---------------- */
+talkButton.onclick = async () => {
+    if (talkPC) return stopTalking();
+    if (sos.state !== "accepted") return;
+    talkButton.disabled = true;
+    talkButton.textContent = "Connecting...";
+    try {
+        if (!localMicStream) {
+            localMicStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
         }
-
-        catch (error) {
-
-            console.error(
-                "Microphone permission failed:",
-                error
-            );
-
-            talkButton.disabled = true;
-
-            talkButton.textContent =
-                "Microphone Unavailable";
-
-        }
-
+        talkPC = await createTurnPeerConnection();
+        localMicStream.getTracks().forEach(t => talkPC.addTrack(t, localMicStream));
+        await negotiate(talkPC, `${CLOUDFLARE_URL}/from_pc/whip`);
+        talkButton.textContent = "Stop Talking";
+        talkButton.classList.add("on");
+    } catch (err) {
+        console.error("Talk connection failed:", err);
+        stopTalking();
+        talkButton.textContent = err.name === "NotAllowedError" ? "Microphone Blocked" : "Connection Failed";
+        setTimeout(() => { if (!talkPC) talkButton.textContent = "Click to Talk to Pi"; }, 3000);
+    } finally {
+        talkButton.disabled = sos.state !== "accepted";
     }
-
-
-    /*
-     * =========================================================
-     * WEBSITE MICROPHONE -> PI SPEAKER
-     *
-     * Path:
-     *
-     *     /from_pc/whip
-     *
-     * =========================================================
-     */
-
-    talkButton.onclick =
-        async function() {
-
-            if (isTalking) {
-
-                stopTalking();
-
-                return;
-
-            }
-
-
-            if (!localMicStream) {
-
-                await initLocalMic();
-
-            }
-
-
-            if (!localMicStream) {
-
-                alert(
-                    "Website microphone is unavailable."
-                );
-
-                return;
-
-            }
-
-
-            talkButton.disabled = true;
-
-            talkButton.textContent =
-                "Connecting...";
-
-
-            try {
-
-                talkPC = await createTurnPeerConnection();
-
-
-                /*
-                 * Send browser microphone
-                 * to MediaMTX.
-                 */
-
-                localMicStream
-                    .getTracks()
-                    .forEach(track => {
-
-                        talkPC.addTrack(
-                            track,
-                            localMicStream
-                        );
-
-                    });
-
-
-                talkPC.onconnectionstatechange =
-                    () => {
-
-                        console.log(
-                            "Talk connection:",
-                            talkPC.connectionState
-                        );
-
-                    };
-
-
-                const offer =
-                    await talkPC.createOffer();
-
-
-                await talkPC.setLocalDescription(
-                    offer
-                );
-
-
-                await waitForICE(talkPC);
-
-
-                const response =
-                    await fetch(
-                        `${CLOUDFLARE_URL}/from_pc/whip`,
-                        {
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/sdp"
-                            },
-
-                            body:
-                                talkPC.localDescription.sdp
-                        }
-                    );
-
-
-                if (!response.ok) {
-
-                    const errorText =
-                        await response.text();
-
-                    throw new Error(
-                        `WHIP returned ${response.status}: ${errorText}`
-                    );
-
-                }
-
-
-                const answerSdp =
-                    await response.text();
-
-
-                await talkPC.setRemoteDescription(
-                    {
-                        type: "answer",
-                        sdp: answerSdp
-                    }
-                );
-
-
-                isTalking = true;
-
-                talkButton.disabled = false;
-
-                talkButton.textContent =
-                    "Stop Talking";
-
-                talkButton.classList.add(
-                    "active-talk"
-                );
-
-
-                console.log(
-                    "Website -> Pi audio connected"
-                );
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Talk connection failed:",
-                    error
-                );
-
-
-                if (talkPC) {
-
-                    talkPC.close();
-                    talkPC = null;
-
-                }
-
-
-                isTalking = false;
-
-                talkButton.disabled = false;
-
-                talkButton.textContent =
-                    "Connection Failed";
-
-
-                setTimeout(() => {
-
-                    if (!isTalking) {
-
-                        talkButton.textContent =
-                            "Click to Talk to Pi";
-
-                    }
-
-                }, 3000);
-
-            }
-
-        };
-
-
-    /*
-     * =========================================================
-     * STOP TALKING
-     * =========================================================
-     */
-
-    function stopTalking() {
-
-        if (talkPC) {
-
-            talkPC.close();
-            talkPC = null;
-
-        }
-
-
-        isTalking = false;
-
-        talkButton.textContent =
-            "Click to Talk to Pi";
-
-        talkButton.classList.remove(
-            "active-talk"
-        );
-
-    }
-
-
-    /*
-     * =========================================================
-     * START EVERYTHING
-     * =========================================================
-     */
-
-    window.addEventListener(
-        "load",
-        async () => {
-
-            console.log(
-                "Starting Raspberry Pi surveillance system..."
-            );
-
-
-            /*
-             * Start camera first.
-             */
-
-            await startCamera();
-
-
-            /*
-             * Ask browser for microphone permission.
-             *
-             * This does NOT start sending audio to Pi.
-             */
-
-            await initLocalMic();
-
-        }
-    );
-
-
-    /*
-     * =========================================================
-     * CLEANUP
-     * =========================================================
-     */
-
-    window.addEventListener(
-        "beforeunload",
-        () => {
-
-            if (cameraPC)
-                cameraPC.close();
-
-            if (piMicPC)
-                piMicPC.close();
-
-            if (talkPC)
-                talkPC.close();
-
-            if (localMicStream) {
-
-                localMicStream
-                    .getTracks()
-                    .forEach(track =>
-                        track.stop()
-                    );
-
-            }
-
-        }
-    );
-
+};
+
+function stopTalking() {
+    if (talkPC) { talkPC.close(); talkPC = null; }
+    talkButton.textContent = "Click to Talk to Pi";
+    talkButton.classList.remove("on");
+}
+
+/* ---------------- Start / cleanup ---------------- */
+function endSosMedia() {
+    stopCamera();
+    stopPiMicrophone();
+    stopTalking();
+}
+
+if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(err => console.error("Notification permission error:", err));
+}
+
+if (token) startDashboard();
+
+window.addEventListener("beforeunload", () => {
+    endSosMedia();
+    if (localMicStream) localMicStream.getTracks().forEach(t => t.stop());
+});
 </script>
-
 </body>
 </html>
-<!-- Raspberry Pi GitHub automation test -->
-
-
-
-
-
-
 
