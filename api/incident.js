@@ -1,146 +1,198 @@
 
-export default async function handler(req, res) {
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const incidentSecret = process.env.INCIDENT_CONTROL_SECRET;
+const LUA_SCRIPT = `
+local raw = redis.call("GET", KEYS[1])
 
-  if (!redisUrl || !redisToken || !incidentSecret) {
-    return res.status(500).json({
-      error: "Incident endpoint is not configured."
+if not raw then
+  return cjson.encode({ error = "Assignment not found." })
+end
+
+local a = cjson.decode(raw)
+local action = ARGV[1]
+local username = ARGV[2]
+local now = tonumber(ARGV[3])
+
+if a.status ~= "pending" then
+  return cjson.encode({
+    message = "Assignment is no longer pending.",
+    assignment = a
+  })
+end
+
+local function advance()
+  local candidates = a.candidates
+  local nextIndex = (a.currentIndex or 0) + 2
+
+  while nextIndex <= #candidates do
+    local candidate = candidates[nextIndex]
+    local deviceRaw = redis.call(
+      "GET",
+      "police_device:" .. candidate.username
+    )
+
+    if deviceRaw then
+      local ok, device = pcall(cjson.decode, deviceRaw)
+
+      if ok and device.status == "available" then
+        a.currentIndex = nextIndex - 1
+        a.assignedTo = candidate.username
+        a.distanceKm = candidate.distanceKm
+        a.assignedAt = os.date(
+          "!%Y-%m-%dT%H:%M:%SZ",
+          math.floor(now / 1000)
+        )
+        a.deadline = now + 15000
+        a.acceptedBy = cjson.null
+
+        return true
+      end
+    end
+
+    nextIndex = nextIndex + 1
+  end
+
+  a.status = "unassigned"
+  a.assignedTo = cjson.null
+  a.deadline = cjson.null
+
+  return false
+end
+
+if action == "check" then
+  if now >= a.deadline then
+    advance()
+  end
+
+elseif action == "accept" then
+  if username ~= a.assignedTo then
+    return cjson.encode({
+      error = "This incident is assigned to another PC."
+    })
+  end
+
+  if now >= a.deadline then
+    advance()
+  else
+    a.status = "accepted"
+    a.acceptedBy = username
+    a.acceptedAt = os.date(
+      "!%Y-%m-%dT%H:%M:%SZ",
+      math.floor(now / 1000)
+    )
+  end
+
+elseif action == "decline" then
+  if username ~= a.assignedTo then
+    return cjson.encode({
+      error = "This incident is assigned to another PC."
+    })
+  end
+
+  advance()
+
+else
+  return cjson.encode({
+    error = "Invalid action."
+  })
+end
+
+redis.call(
+  "SET",
+  KEYS[1],
+  cjson.encode(a),
+  "EX",
+  86400
+)
+
+return cjson.encode({
+  success = true,
+  assignment = a
+})
+`;
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({
+      error: "Method not allowed."
     });
   }
 
-  const redisHeaders = {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!redisUrl || !redisToken) {
+    return res.status(500).json({
+      error: "Redis is not configured."
+    });
+  }
+
+  const { incidentId, username, action } = req.body || {};
+
+  if (
+    typeof incidentId !== "string" ||
+    incidentId.length > 100 ||
+    typeof username !== "string" ||
+    !/^[a-zA-Z0-9_-]{1,50}$/.test(username) ||
+    !["check", "accept", "decline"].includes(action)
+  ) {
+    return res.status(400).json({
+      error: "Invalid request."
+    });
+  }
+
+  const assignmentKey = `assignment:${incidentId}`;
+
+  try {
+    const url =
+      `${redisUrl}/eval/${encodeURIComponent(LUA_SCRIPT)}/1/` +
+      `${encodeURIComponent(assignmentKey)}/` +
+      `${encodeURIComponent(action)}/` +
+      `${encodeURIComponent(username)}/` +
+      `${Date.now()}`;
+
+    const response = await fetch(url, {
+  headers: {
     Authorization: `Bearer ${redisToken}`
-  };
+  },
+  signal: AbortSignal.timeout(10000)
+});
 
-  // Public read-only status for the website.
-  if (req.method === "GET") {
-    try {
-      const response = await fetch(
-        `${redisUrl}/get/incident_status`,
-        { headers: redisHeaders }
-      );
+const responseText = await response.text();
 
-      if (!response.ok) {
-        throw new Error("Redis read failed");
-      }
+console.log("Assignment Redis HTTP status:", response.status);
+console.log("Assignment Redis response:", responseText);
 
-      const result = await response.json();
+if (!response.ok) {
+  throw new Error(
+    `Redis HTTP ${response.status}: ${responseText}`
+  );
+}
 
-      if (!result.result) {
-        return res.status(200).json({
-          active: false,
-          reason: null,
-          updatedAt: null
-        });
-      }
+const data = JSON.parse(responseText);
 
-      return res.status(200).json(
-        JSON.parse(result.result)
-      );
-    } catch (error) {
-      return res.status(500).json({
-        error: "Could not read incident status."
-      });
+if (data.error) {
+  throw new Error(`Redis error: ${data.error}`);
+}
+
+if (typeof data.result !== "string") {
+  throw new Error(
+    "Unexpected Redis result: " + JSON.stringify(data)
+  );
+}
+
+const result = JSON.parse(data.result);
+
+    if (result.error) {
+      return res.status(400).json(result);
     }
+
+    return res.status(200).json(result);
+
+  } catch (error) {
+    console.error("Assignment response error:", error);
+
+    return res.status(500).json({
+      error: "Could not process assignment response."
+    });
   }
-
-  // Only authorized clients can change incident status.
-  if (req.method === "POST" || req.method === "DELETE") {
-    const suppliedSecret = req.headers["x-incident-secret"];
-
-    if (
-      typeof suppliedSecret !== "string" ||
-      suppliedSecret !== incidentSecret
-    ) {
-      return res.status(401).json({
-        error: "Unauthorized."
-      });
-    }
-
-    try {
-      const readResponse = await fetch(
-        `${redisUrl}/get/incident_status`,
-        { headers: redisHeaders }
-      );
-
-      if (!readResponse.ok) {
-        throw new Error("Redis read failed");
-      }
-
-      const readResult = await readResponse.json();
-
-      let previous = readResult.result
-        ? JSON.parse(readResult.result)
-        : { active: false };
-
-      let status;
-
-      if (req.method === "DELETE") {
-        status = {
-          active: false,
-          reason: null,
-          updatedAt: new Date().toISOString()
-        };
-      } else {
-        if (typeof req.body?.active !== "boolean") {
-          return res.status(400).json({
-            error: "Body must include active: true or false."
-          });
-        }
-
-        if (req.body.active && previous.active) {
-          // Keep an existing incident active; log the additional trigger.
-          status = {
-            ...previous,
-            lastTriggerReason:
-              typeof req.body.reason === "string"
-                ? req.body.reason.slice(0, 200)
-                : previous.lastTriggerReason,
-            updatedAt: new Date().toISOString()
-          };
-        } else {
-          status = {
-            active: req.body.active,
-            reason: req.body.active &&
-                    typeof req.body.reason === "string"
-              ? req.body.reason.slice(0, 200)
-              : null,
-            lastTriggerReason: req.body.active
-              ? (typeof req.body.reason === "string"
-                  ? req.body.reason.slice(0, 200)
-                  : null)
-              : null,
-            startedAt: req.body.active
-              ? new Date().toISOString()
-              : null,
-            updatedAt: new Date().toISOString()
-          };
-        }
-      }
-
-      const saveResponse = await fetch(
-        `${redisUrl}/set/incident_status/${encodeURIComponent(
-          JSON.stringify(status)
-        )}`,
-        { headers: redisHeaders }
-      );
-
-      if (!saveResponse.ok) {
-        throw new Error("Redis write failed");
-      }
-
-      return res.status(200).json(status);
-    } catch (error) {
-      return res.status(500).json({
-        error: "Could not update incident status."
-      });
-    }
-  }
-
-  res.setHeader("Allow", "GET, POST, DELETE");
-  return res.status(405).json({
-    error: "Method not allowed."
-  });
 }
