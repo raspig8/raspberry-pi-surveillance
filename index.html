@@ -195,8 +195,9 @@ async function refreshUrls() {
         mediaUrl = media;
         console.log("Raspberry Pi addresses changed:", api, media);
         flash("Reconnected to the Raspberry Pi at its new address.");
-        endSosMedia();
-        if (sos.state === "accepted") startCamera();
+        // Running video/audio does not use the tunnel, so leave it alone.
+        // Only start the camera again if it is not connected.
+        if (sos.state === "accepted" && !cameraPC) startCamera();
     } catch (err) {
         console.error("Address check failed:", err);
     }
@@ -407,10 +408,18 @@ listenButton.onclick = async () => {
     listenButton.disabled = true;
     listenButton.textContent = "Connecting...";
     try {
-        piMicPC = await connectWHEP("/mic", "audio", e => {
+        const pc = await connectWHEP("/mic", "audio", e => {
             piAudio.srcObject = e.streams[0];
             piAudio.play().catch(err => console.log("Audio playback blocked:", err));
         });
+        pc.onconnectionstatechange = () => {
+            if (piMicPC === pc && ["failed", "closed"].includes(pc.connectionState)) {
+                stopPiMicrophone();
+                listenButton.textContent = "Pi Microphone Disconnected";
+                setTimeout(() => { if (!piMicPC) listenButton.textContent = "Enable Pi Microphone"; }, 3000);
+            }
+        };
+        piMicPC = pc;
         listenButton.textContent = "Stop Pi Microphone";
         listenButton.classList.add("on");
     } catch (err) {
@@ -443,6 +452,14 @@ talkButton.onclick = async () => {
         }
         talkPC = await createTurnPeerConnection();
         localMicStream.getTracks().forEach(t => talkPC.addTrack(t, localMicStream));
+        const pc = talkPC;
+        pc.onconnectionstatechange = () => {
+            if (talkPC === pc && ["failed", "closed"].includes(pc.connectionState)) {
+                stopTalking();
+                talkButton.textContent = "Talk Disconnected";
+                setTimeout(() => { if (!talkPC) talkButton.textContent = "Click to Talk to Pi"; }, 3000);
+            }
+        };
         await negotiate(talkPC, `${mediaUrl}/from_pc/whip`);
         talkButton.textContent = "Stop Talking";
         talkButton.classList.add("on");
