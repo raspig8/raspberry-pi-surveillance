@@ -79,6 +79,8 @@ button:disabled,#talkButton:disabled{background:#777;cursor:not-allowed}
 const PI_API_URL = "https://tours-reef-applications-consultancy.trycloudflare.com";
 // Cloudflare tunnel to MediaMTX (camera / mic / talk-back)
 const CLOUDFLARE_URL = "https://der-generate-contracting-refrigerator.trycloudflare.com";
+// Current addresses. They switch automatically if the Pi restarts a tunnel.
+let piApi = PI_API_URL, mediaUrl = CLOUDFLARE_URL, lastUrlCheck = 0;
 const POLL_MS = 1000;
 const MAP_REFRESH_MS = 5000;
 
@@ -100,7 +102,7 @@ async function api(path, options = {}) {
     if (token) headers.Authorization = "Bearer " + token;
     let res;
     try {
-        res = await fetch(PI_API_URL + path, { ...options, headers, cache: "no-store", signal: AbortSignal.timeout(8000) });
+        res = await fetch(piApi + path, { ...options, headers, cache: "no-store", signal: AbortSignal.timeout(8000) });
     } catch {
         throw new Error("Raspberry Pi server is unreachable");
     }
@@ -173,8 +175,31 @@ async function poll() {
         render();
     } catch (err) {
         if (token) sosStatus.textContent = "Connection problem: " + err.message;
+        refreshUrls();
     } finally {
         polling = false;
+    }
+}
+
+/* If the Pi restarted a tunnel, Vercel soon serves this page with new addresses.
+   Read them from the live page and switch without logging the officer out. */
+async function refreshUrls() {
+    if (Date.now() - lastUrlCheck < 10000) return;
+    lastUrlCheck = Date.now();
+    try {
+        const html = await (await fetch(location.pathname, { cache: "no-store" })).text();
+        const grab = name => (html.match(new RegExp(name + '\\s*=\\s*"(https://[^"]+)"')) || [])[1];
+        const api = grab("PI_API_URL"), media = grab("CLOUDFLARE_URL");
+        if (!api || !media || (api === piApi && media === mediaUrl)) return;
+        piApi = api;
+        mediaUrl = media;
+        console.log("Raspberry Pi addresses changed:", api, media);
+        flash("Reconnected to the Raspberry Pi at its new address.");
+        // Running video/audio does not use the tunnel, so leave it alone.
+        // Only start the camera again if it is not connected.
+        if (sos.state === "accepted" && !cameraPC) startCamera();
+    } catch (err) {
+        console.error("Address check failed:", err);
     }
 }
 
@@ -318,7 +343,7 @@ async function connectWHEP(path, kind, onTrack) {
     try {
         pc.ontrack = onTrack;
         pc.addTransceiver(kind, { direction: "recvonly" });
-        await negotiate(pc, `${CLOUDFLARE_URL}${path}/whep`);
+        await negotiate(pc, `${mediaUrl}${path}/whep`);
         return pc;
     } catch (err) {
         pc.close();
@@ -362,6 +387,7 @@ async function startCamera() {
 }
 
 function retryCamera(message) {
+    refreshUrls();
     cameraStatus.textContent = message + ". Retrying in 5 s...";
     clearTimeout(cameraRetryTimer);
     cameraRetryTimer = setTimeout(() => { if (sos.state === "accepted") startCamera(); }, 5000);
@@ -382,10 +408,18 @@ listenButton.onclick = async () => {
     listenButton.disabled = true;
     listenButton.textContent = "Connecting...";
     try {
-        piMicPC = await connectWHEP("/mic", "audio", e => {
+        const pc = await connectWHEP("/mic", "audio", e => {
             piAudio.srcObject = e.streams[0];
             piAudio.play().catch(err => console.log("Audio playback blocked:", err));
         });
+        pc.onconnectionstatechange = () => {
+            if (piMicPC === pc && ["failed", "closed"].includes(pc.connectionState)) {
+                stopPiMicrophone();
+                listenButton.textContent = "Pi Microphone Disconnected";
+                setTimeout(() => { if (!piMicPC) listenButton.textContent = "Enable Pi Microphone"; }, 3000);
+            }
+        };
+        piMicPC = pc;
         listenButton.textContent = "Stop Pi Microphone";
         listenButton.classList.add("on");
     } catch (err) {
@@ -418,7 +452,15 @@ talkButton.onclick = async () => {
         }
         talkPC = await createTurnPeerConnection();
         localMicStream.getTracks().forEach(t => talkPC.addTrack(t, localMicStream));
-        await negotiate(talkPC, `${CLOUDFLARE_URL}/from_pc/whip`);
+        const pc = talkPC;
+        pc.onconnectionstatechange = () => {
+            if (talkPC === pc && ["failed", "closed"].includes(pc.connectionState)) {
+                stopTalking();
+                talkButton.textContent = "Talk Disconnected";
+                setTimeout(() => { if (!talkPC) talkButton.textContent = "Click to Talk to Pi"; }, 3000);
+            }
+        };
+        await negotiate(talkPC, `${mediaUrl}/from_pc/whip`);
         talkButton.textContent = "Stop Talking";
         talkButton.classList.add("on");
     } catch (err) {
