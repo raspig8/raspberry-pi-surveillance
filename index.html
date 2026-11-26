@@ -169,7 +169,12 @@ async function poll() {
         if (sos.state === "offered" && (prev.state !== "offered" || prev.id !== sos.id)) notify(sos.reason);
         if (prev.state === "accepted" && sos.state !== "accepted") endSosMedia();
         if (prev.state !== "accepted" && sos.state === "accepted") startCamera();
-        if (prev.state === "offered" && sos.state === "none" && !accepting) {
+        // Why did the SOS disappear? The Pi tells us for 60 s after it ends.
+        const ended = data.lastEnded;
+        const riderReset = ended && ended.by === "rider" && ended.id === prev.id;
+        if (riderReset && prev.state !== "none" && sos.state === "none") {
+            flash("SOS cancelled by the rider (helmet button). System reset.");
+        } else if (prev.state === "offered" && sos.state === "none" && !accepting) {
             flash("SOS passed to the next station (not accepted in time).");
         }
         render();
